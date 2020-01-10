@@ -1,0 +1,47 @@
+diff -up sysstat-9.0.4/iostat.c.rw-await sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4/iostat.c.rw-await	2015-11-25 11:55:18.082045466 +0100
++++ sysstat-9.0.4/iostat.c	2015-11-25 13:02:32.842347943 +0100
+@@ -1189,7 +1189,7 @@ void write_disk_stat_header(int *fctr)
+ 		else {
+ 			printf("   rsec/s   wsec/s");
+ 		}
+-		printf(" avgrq-sz avgqu-sz   await  svctm  %%util\n");
++		printf(" avgrq-sz avgqu-sz   await r_await w_await  svctm  %%util\n");
+ 	}
+ 	else {
+ 		/* Basic stats */
+@@ -1257,6 +1257,7 @@ void write_ext_stat(int curr, unsigned l
+ 	char *devname = NULL;
+ 	struct stats_disk sdc, sdp;
+ 	struct ext_disk_stats xds;
++        double r_await, w_await;
+ 	
+ 	/*
+ 	 * Counters overflows are possible, but don't need to be handled in
+@@ -1293,8 +1294,15 @@ void write_ext_stat(int curr, unsigned l
+ 		devname = shi->name;
+ 	}
+ 	
+-	/*      DEV   rrq/s wrq/s   r/s   w/s  rsec  wsec  rqsz  qusz await svctm %util */
+-	printf("%-13s %8.2f %8.2f %7.2f %7.2f %8.2f %8.2f %8.2f %8.2f %7.2f %6.2f %6.2f\n",
++	r_await = (ioi->rd_ios - ioj->rd_ios) ?
++		(ioi->rd_ticks - ioj->rd_ticks) /
++		((double) (ioi->rd_ios - ioj->rd_ios)) : 0.0;
++	w_await = (ioi->wr_ios - ioj->wr_ios) ?
++		(ioi->wr_ticks - ioj->wr_ticks) /
++		((double) (ioi->wr_ios - ioj->wr_ios)) : 0.0;
++
++	/*      DEV   rrq/s wrq/s   r/s   w/s  rsec  wsec  rqsz  qusz await r_await w_await svctm %util */
++	printf("%-13s %8.2f %8.2f %7.2f %7.2f %8.2f %8.2f %8.2f %8.2f %7.2f %7.2f %7.2f %6.2f %6.2f\n",
+ 	       devname,
+ 	       S_VALUE(ioj->rd_merges, ioi->rd_merges, itv),
+ 	       S_VALUE(ioj->wr_merges, ioi->wr_merges, itv),
+@@ -1305,6 +1313,8 @@ void write_ext_stat(int curr, unsigned l
+ 	       xds.arqsz,
+ 	       S_VALUE(ioj->rq_ticks, ioi->rq_ticks, itv) / 1000.0,
+ 	       xds.await,
++	       r_await,
++	       w_await,
+ 	       /* The ticks output is biased to output 1000 ticks per second */
+ 	       xds.svctm,
+ 	       /* Again: Ticks in milliseconds */

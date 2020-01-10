@@ -1,0 +1,45 @@
+diff -upr sysstat-9.0.4.orig/common.h sysstat-9.0.4/common.h
+--- sysstat-9.0.4.orig/common.h	2016-02-16 12:46:17.348124261 +0100
++++ sysstat-9.0.4/common.h	2016-02-16 13:46:41.310472040 +0100
+@@ -57,7 +57,7 @@
+ #define MAX_FILE_LEN	256
+ #define MAX_PF_NAME	1024
+ #define DEVMAP_MAJOR	253
+-#define MAX_NAME_LEN	72
++#define MAX_NAME_LEN	128
+ 
+ #define NR_DISKS	4
+ 
+diff -upr sysstat-9.0.4.orig/iostat.c sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4.orig/iostat.c	2016-02-16 12:46:17.349124258 +0100
++++ sysstat-9.0.4/iostat.c	2016-02-16 13:57:56.357298425 +0100
+@@ -939,7 +939,8 @@ void read_diskstats_stat(int curr)
+ 				 * (if different from "nodev") works around known issues
+ 				 * with EMC PowerPath.
+ 				 */
+-				strncpy(dev_name, ioc_dname, MAX_NAME_LEN);
++				strncpy(dev_name, ioc_dname, MAX_NAME_LEN - 1);
++                                dev_name[MAX_NAME_LEN - 1] = '\0';
+ 			}
+ 		}
+ 
+@@ -950,7 +951,8 @@ void read_diskstats_stat(int curr)
+ 			 */
+ 			dm_name = transform_devmapname(major, minor);
+ 			if (dm_name) {
+-				strncpy(dev_name, dm_name, MAX_NAME_LEN);
++				strncpy(dev_name, dm_name, MAX_NAME_LEN - 1);
++                                dev_name[MAX_NAME_LEN - 1] = '\0';
+ 			}
+ 		}
+ 
+@@ -1008,7 +1010,8 @@ void read_ppartitions_stat(int curr)
+ 		if ((ioc_dname = ioc_name(major, minor)) != NULL) {
+ 			if (strcmp(dev_name, ioc_dname) && strcmp(ioc_dname, K_NODEV)) {
+ 				/* Compensate for EMC PowerPath driver bug */
+-				strncpy(dev_name, ioc_dname, MAX_NAME_LEN);
++				strncpy(dev_name, ioc_dname, MAX_NAME_LEN - 1);
++                                dev_name[MAX_NAME_LEN - 1] = '\0';
+ 			}
+ 		}
+ 

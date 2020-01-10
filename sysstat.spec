@@ -1,6 +1,6 @@
 Name: sysstat
 Version: 9.0.4
-Release: 27%{?dist}
+Release: 31%{?dist}
 Summary: The sar and iostat system monitoring commands
 License: GPLv2+
 Group: Applications/System
@@ -70,8 +70,18 @@ Patch31: sysstat-9.0.4-overwrite-sa.patch
 Patch32: sysstat-9.0.4-zip-conf.patch
 # fixes 1124180
 Patch33: sysstat-9.0.4-dyn-tick.patch
+# fixes 1224878
+Patch34: sysstat-9.0.4-pids-prealloc.patch
+# fixes 887231
+Patch35: sysstat-9.0.4-localtime.patch
+# fixes 1185057
+Patch36: sysstat-9.0.4-rw-await.patch
+# fixes 1188612
+Patch37: sysstat-9.0.4-elapsed-time.patch
+# fixes 1308862
+Patch38: sysstat-9.0.4-max-name-len.patch
 
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n) 
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Requires: /sbin/chkconfig
 Requires: sh-utils textutils grep fileutils /etc/cron.d
@@ -119,6 +129,11 @@ activity.
 %patch31 -p1 -b .overwrite-sa
 %patch32 -p1 -b .zip-conf
 %patch33 -p1 -b .dyn-tick
+%patch34 -p1 -b .pids-prealloc
+%patch35 -p1 -b .localtime
+%patch36 -p1 -b .rw-await
+%patch37 -p1 -b .elapsed-time
+%patch38 -p1 -b .max-name-len
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
 
@@ -175,6 +190,29 @@ rm -rf %{buildroot}
 %{_localstatedir}/log/sa
 
 %changelog
+* Tue Mar 08 2016 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-31
+- related: #1224878
+  in some corner cases, pidstat could still output values for %% CPU bigger
+  than 100; this commit fixes the issue
+
+* Tue Feb 16 2016 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-30
+- related: #1308862
+  fixed buffer size when using strncpy
+
+* Tue Feb 16 2016 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-29
+- resolves: #1308862
+  fixed bug when iostat didn't display the full device name if it's too long
+
+* Fri Nov 27 2015 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-28
+- resolves: #1224878
+  fixed bug when pidstat could run out of pre-allocated space for PIDs
+- resolves: #887231
+  fixed segfaults on bogus localtime input
+- resolves: #1185057
+  added two new columns to iostat: r_await and w_await
+- resolves: #1188612
+  fixed description of %util field in sar(1) and iostat(1) man pages
+
 * Mon Aug  4 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-27
 - resolves: #1124180
   added workaround for dyn-tick kernel feature which makes /proc/stat file

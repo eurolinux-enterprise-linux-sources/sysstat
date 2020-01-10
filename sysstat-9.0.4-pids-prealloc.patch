@@ -1,0 +1,194 @@
+diff -up sysstat-9.0.4/common.h.pids-prealloc sysstat-9.0.4/common.h
+--- sysstat-9.0.4/common.h.pids-prealloc	2016-03-08 13:34:40.656657053 +0100
++++ sysstat-9.0.4/common.h	2016-03-08 13:35:52.918487403 +0100
+@@ -94,9 +94,12 @@
+  *
+  * NB: Define SP_VALUE() to normalize to %;
+  * HZ is 1024 on IA64 and % should be normalized to 100.
++ * SP_VALUE_100() will not output value bigger than 100; this is needed for some
++ *     corner cases, should be used with care.
+  */
+ #define S_VALUE(m,n,p)	(((double) ((n) - (m))) / (p) * HZ)
+ #define SP_VALUE(m,n,p)	(((double) ((n) - (m))) / (p) * 100)
++#define SP_VALUE_100(m,n,p) MINIMUM((((double) ((n) - (m))) / (p) * 100),100)
+ 
+ /*
+  * Under very special circumstances, STDOUT may become unavailable.
+diff -up sysstat-9.0.4/pidstat.c.pids-prealloc sysstat-9.0.4/pidstat.c
+--- sysstat-9.0.4/pidstat.c.pids-prealloc	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/pidstat.c	2016-03-08 13:37:43.869226923 +0100
+@@ -147,6 +147,27 @@ void salloc_pid(unsigned int len)
+ 
+ /*
+  ***************************************************************************
++ * Reallocate structures for PIDs to read.
++ ***************************************************************************
++ */
++void realloc_pid(void)
++{
++	short i;
++	unsigned int new_size = 2 * pid_nr;
++
++	for (i = 0; i < 3; i++) {
++		if ((st_pid_list[i] = (struct pid_stats *) realloc(st_pid_list[i], PID_STATS_SIZE * new_size)) == NULL) {
++			perror("realloc");
++			exit(4);
++		}
++		memset(st_pid_list[i] + pid_nr, 0, PID_STATS_SIZE * (new_size - pid_nr));
++	}
++
++	pid_nr = new_size;
++}
++
++/*
++ ***************************************************************************
+  * Free PID list structures.
+  ***************************************************************************
+  */
+@@ -687,22 +708,20 @@ void read_task_stats(int curr, unsigned
+ 	if ((dir = opendir(filename)) == NULL)
+ 		return;
+ 
+-	while (*index < pid_nr) {
++	while ((drp = readdir(dir)) != NULL) {
++		if (!isdigit(drp->d_name[0])) {
++			continue;
++		}
+ 
+-		while ((drp = readdir(dir)) != NULL) {
+-			if (isdigit(drp->d_name[0]))
+-				break;
++		psti = st_pid_list[curr] + (*index)++;
++		if (read_pid_stats(atoi(drp->d_name), psti, &thr_nr, pid)) {
++			/* Thread no longer exists */
++			psti->pid = 0;
+ 		}
+ 
+-		if (drp) {
+-			psti = st_pid_list[curr] + (*index)++;
+-			if (read_pid_stats(atoi(drp->d_name), psti, &thr_nr, pid)) {
+-				/* Thread no longer exists */
+-				psti->pid = 0;
+-			}
++		if (*index >= pid_nr) {
++			realloc_pid();
+ 		}
+-		else
+-			break;
+ 	}
+ 	closedir(dir);
+ }
+@@ -743,36 +762,35 @@ void read_stats(int curr)
+ 			exit(4);
+ 		}
+ 
+-		while (p < pid_nr) {
++		/* Get directory entries */
++		while ((drp = readdir(dir)) != NULL) {
++			if (!isdigit(drp->d_name[0])) {
++				continue;
++			}
++
++			psti = st_pid_list[curr] + p++;
++			pid = atoi(drp->d_name);
+ 
+-			/* Get directory entries */
+-			while ((drp = readdir(dir)) != NULL) {
+-				if (isdigit(drp->d_name[0]))
+-					break;
++			if (read_pid_stats(pid, psti, &thr_nr, 0)) {
++				/* Process has terminated */
++				psti->pid = 0;
+ 			}
+-			if (drp) {
+-				psti = st_pid_list[curr] + p++;
+-				pid = atoi(drp->d_name);
+-	
+-				if (read_pid_stats(pid, psti, &thr_nr, 0)) {
+-					/* Process has terminated */
+-					psti->pid = 0;
+-				}
+-	
+-				else if (DISPLAY_TID(pidflag)) {
+-					/* Read stats for threads in task subdirectory */
+-					read_task_stats(curr, pid, &p);
+-				}
++
++			else if (DISPLAY_TID(pidflag)) {
++				/* Read stats for threads in task subdirectory */
++				read_task_stats(curr, pid, &p);
+ 			}
+-			else {
+-				for (q = p; q < pid_nr; q++) {
+-					psti = st_pid_list[curr] + q;
+-					psti->pid = 0;
+-				}
+-				break;
++
++			if (p >= pid_nr) {
++				realloc_pid();
+ 			}
+ 		}
+ 
++		for (q = p; q < pid_nr; q++) {
++			psti = st_pid_list[curr] + q;
++			psti->pid = 0;
++		}
++
+ 		/* Close /proc directory */
+ 		closedir(dir);
+ 	}
+@@ -1047,15 +1065,15 @@ int write_pid_task_all_stats(int prev, i
+ 
+ 		if (DISPLAY_CPU(actflag)) {
+ 			printf(" %7.2f %7.2f %7.2f %7.2f",
+-			       SP_VALUE(pstj->utime - pstj->gtime,
++			       SP_VALUE_100(pstj->utime - pstj->gtime,
+ 					psti->utime - psti->gtime, itv),
+-			       SP_VALUE(pstj->stime,  psti->stime, itv),
+-			       SP_VALUE(pstj->gtime,  psti->gtime, itv),
++			       SP_VALUE_100(pstj->stime,  psti->stime, itv),
++			       SP_VALUE_100(pstj->gtime,  psti->gtime, itv),
+ 			       /* User time already includes guest time */
+ 			       IRIX_MODE_OFF(pidflag) ?
+-			       SP_VALUE(pstj->utime + pstj->stime,
++			       SP_VALUE_100(pstj->utime + pstj->stime,
+ 					psti->utime + psti->stime, g_itv) :
+-			       SP_VALUE(pstj->utime + pstj->stime,
++			       SP_VALUE_100(pstj->utime + pstj->stime,
+ 					psti->utime + psti->stime, itv));
+ 
+ 			printf("   %3d", psti->processor);
+@@ -1214,15 +1232,15 @@ int write_pid_task_cpu_stats(int prev, i
+ 	
+ 		print_line_id(curr_string, psti);
+ 		printf(" %7.2f %7.2f %7.2f %7.2f",
+-		       SP_VALUE(pstj->utime - pstj->gtime,
++		       SP_VALUE_100(pstj->utime - pstj->gtime,
+ 				psti->utime - psti->gtime, itv),
+-		       SP_VALUE(pstj->stime,  psti->stime, itv),
+-		       SP_VALUE(pstj->gtime,  psti->gtime, itv),
++		       SP_VALUE_100(pstj->stime,  psti->stime, itv),
++		       SP_VALUE_100(pstj->gtime,  psti->gtime, itv),
+ 		       /* User time already includes guest time */
+ 		       IRIX_MODE_OFF(pidflag) ?
+-		       SP_VALUE(pstj->utime + pstj->stime,
++		       SP_VALUE_100(pstj->utime + pstj->stime,
+ 				psti->utime + psti->stime, g_itv) :
+-		       SP_VALUE(pstj->utime + pstj->stime,
++		       SP_VALUE_100(pstj->utime + pstj->stime,
+ 				psti->utime + psti->stime, itv));
+ 
+ 		if (!disp_avg) {
+diff -up sysstat-9.0.4/pidstat.h.pids-prealloc sysstat-9.0.4/pidstat.h
+--- sysstat-9.0.4/pidstat.h.pids-prealloc	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/pidstat.h	2016-03-08 13:30:24.502258427 +0100
+@@ -13,7 +13,7 @@
+ #define K_P_CHILD	"CHILD"
+ #define K_P_ALL		"ALL"
+ 
+-#define NR_PID_PREALLOC	10
++#define NR_PID_PREALLOC	100
+ 
+ #define MAX_COMM_LEN	16
+ #define MAX_CMDLINE_LEN	128
