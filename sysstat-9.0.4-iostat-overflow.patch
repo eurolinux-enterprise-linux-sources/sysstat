@@ -1,0 +1,34 @@
+diff -up sysstat-9.0.4/ioconf.c.iostat-overflow sysstat-9.0.4/ioconf.c
+--- sysstat-9.0.4/ioconf.c.iostat-overflow	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/ioconf.c	2013-05-22 14:48:27.975035532 +0200
+@@ -471,6 +471,7 @@ char *transform_devmapname(unsigned int
+ 	struct dirent *dp;
+ 	char filen[MAX_FILE_LEN];
+ 	char *dm_name = NULL;
++	static char name[MAX_NAME_LEN];
+ 	struct stat aux;
+ 	unsigned int dm_major, dm_minor;
+ 
+@@ -492,7 +493,9 @@ char *transform_devmapname(unsigned int
+ 			dm_minor = (aux.st_rdev & 0xff);
+ 	
+ 			if ((dm_minor == minor) && (dm_major == major)) {
+-				dm_name = dp->d_name;
++				strncpy(name, dp->d_name, MAX_NAME_LEN);
++				name[MAX_NAME_LEN - 1] = '\0';
++				dm_name = name;
+ 				break;
+ 			}
+ 		}
+diff -up sysstat-9.0.4/iostat.c.iostat-overflow sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4/iostat.c.iostat-overflow	2013-05-21 20:02:41.000000000 +0200
++++ sysstat-9.0.4/iostat.c	2013-05-21 20:10:17.899452058 +0200
+@@ -949,7 +949,7 @@ void read_diskstats_stat(int curr)
+ 			 */
+ 			dm_name = transform_devmapname(major, minor);
+ 			if (dm_name) {
+-				strcpy(dev_name, dm_name);
++				strncpy(dev_name, dm_name, MAX_NAME_LEN);
+ 			}
+ 		}
+ 

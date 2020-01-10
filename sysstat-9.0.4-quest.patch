@@ -1,0 +1,30 @@
+diff -up sysstat-9.0.4/pr_stats.c.qu sysstat-9.0.4/pr_stats.c
+--- sysstat-9.0.4/pr_stats.c.qu	2011-01-20 12:25:10.000000000 +0100
++++ sysstat-9.0.4/pr_stats.c	2011-01-20 12:27:53.000000000 +0100
+@@ -58,6 +58,7 @@ __print_funct_t print_cpu_stats(struct a
+ {
+ 	int i;
+ 	struct stats_cpu *scc, *scp;
++	unsigned long long cuser, puser;
+ 
+ 	if (dis) {
+ 		if (DISPLAY_CPU_DEF(a->opt_flags)) {
+@@ -139,10 +140,16 @@ __print_funct_t print_cpu_stats(struct a
+ 				       ll_sp_value(scp->cpu_idle,   scc->cpu_idle,   g_itv));
+ 			}
+ 			else if (DISPLAY_CPU_ALL(a->opt_flags)) {
++				cuser = scc->cpu_user - scc->cpu_guest;
++				puser = scp->cpu_user - scp->cpu_guest;
++				if (puser > cuser) {
++					g_itv = g_itv + puser - cuser;
++					puser = cuser;
++				}
++
+ 				printf("    %6.2f    %6.2f    %6.2f    %6.2f    %6.2f    %6.2f"
+ 				       "    %6.2f    %6.2f    %6.2f\n",
+-				       ll_sp_value(scp->cpu_user - scp->cpu_guest,
+-						   scc->cpu_user - scc->cpu_guest,     g_itv),
++				       ll_sp_value(puser,            cuser,     g_itv),
+ 				       ll_sp_value(scp->cpu_nice,    scc->cpu_nice,    g_itv),
+ 				       ll_sp_value(scp->cpu_sys   ,  scc->cpu_sys   ,  g_itv),
+ 				       ll_sp_value(scp->cpu_iowait,  scc->cpu_iowait,  g_itv),

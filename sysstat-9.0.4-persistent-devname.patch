@@ -1,0 +1,840 @@
+diff -up sysstat-9.0.4/common.c.persistent sysstat-9.0.4/common.c
+--- sysstat-9.0.4/common.c.persistent	2012-08-06 15:46:46.763161655 +0200
++++ sysstat-9.0.4/common.c	2012-08-06 15:59:38.638754827 +0200
+@@ -28,6 +28,8 @@
+ #include <sys/ioctl.h>
+ #include <sys/types.h>
+ #include <dirent.h>
++#include <ctype.h>
++#include <libgen.h>
+ 
+ #include "version.h"
+ #include "common.h"
+@@ -47,6 +49,9 @@ unsigned int hz;
+ /* Number of bit shifts to convert pages to kB */
+ unsigned int kb_shift;
+ 
++/* Type of persistent device names used in sar and iostat. */
++char persistent_name_type[MAX_FILE_LEN];
++
+ /*
+  ***************************************************************************
+  * Print sysstat version number and exit.
+@@ -649,3 +654,241 @@ void compute_ext_disk_stats(struct stats
+ 		((sdc->rd_sect - sdp->rd_sect) + (sdc->wr_sect - sdp->wr_sect)) /
+ 		((double) (sdc->nr_ios - sdp->nr_ios)) : 0.0;
+ }
++
++/*
++ ***************************************************************************
++ * Convert in-place input string to lowercase.
++ *
++ * IN:
++ * @str		String to be converted.
++ *
++ * OUT:
++ * @str		String in lowercase.
++ *
++ * RETURNS:
++ * String in lowercase.
++ ***************************************************************************
++*/
++char *strtolower(char *str)
++{
++	char *cp = str;
++
++	while(*cp) {
++		*cp = tolower(*cp);
++		cp++;
++	}
++
++	return(str);
++}
++
++/*
++ ***************************************************************************
++ * Get persistent type name directory from type.
++ *
++ * IN:
++ * @type	Persistent type name.
++ *
++ * RETURNS:
++ * Path to the persistent type name directory.
++ ***************************************************************************
++*/
++char *get_persistent_type_dir(char *type)
++{
++	static char dir[32];
++
++	snprintf(dir, 32, "/dev/disk/by-%s", type);
++
++	if (access(dir, R_OK) != 0) {
++		return (NULL);
++	}
++
++	return (dir);
++}
++
++/*
++ ***************************************************************************
++ * Get persistent name absolute path.
++ *
++ * IN:
++ * @name	Persistent name.
++ *
++ * RETURNS:
++ * Path to the persistent name.
++ ***************************************************************************
++*/
++char *get_persistent_name_path(char *name)
++{
++	static char path[PATH_MAX];
++
++	snprintf(path, PATH_MAX, "%s/%s",
++			get_persistent_type_dir(persistent_name_type), name);
++
++	if (access(path, F_OK) != 0) {
++		return (NULL);
++	}
++
++	return (path);
++}
++
++/*
++ ***************************************************************************
++ * Get files from persistent type name directory.
++ *
++ * RETURNS:
++ * List of files in the persistent type name directory in alphabetical order.
++ ***************************************************************************
++*/
++char **get_persistent_names(void)
++{
++	int n, i, k = 0;
++	char *dir;
++	char **files = NULL;
++	struct dirent **namelist;
++
++	/* Get directory name for selected persistent type */
++	dir = get_persistent_type_dir(persistent_name_type);
++	if (!dir)
++		return (NULL);
++
++	n = scandir(dir, &namelist, NULL, alphasort);
++	if (n < 0)
++		return (NULL);
++
++	/* If directory is empty, it contains 2 entries: "." and ".." */
++	if (n <= 2)
++		/* Free list and return NULL */
++		goto free_list;
++
++	/* Ignore the "." and "..", but keep place for one last NULL. */
++	files = (char **) calloc(n - 1, sizeof(char *));
++	if (!files)
++		goto free_list;
++	
++	/*
++	 * i is for traversing namelist, k is for files.
++	 * i != k because we are ignoring "." and ".." entries.
++	 */
++	for (i = 0; i < n; i++) {
++		/* Ignore "." and "..". */
++		if (!strcmp(".", namelist[i]->d_name) ||
++		    !strcmp("..", namelist[i]->d_name))
++			continue;
++
++		files[k] = (char *) calloc(strlen(namelist[i]->d_name) + 1, sizeof(char));
++		if (!files[k])
++			continue;
++
++		strcpy(files[k++], namelist[i]->d_name);
++	}
++	files[k] = NULL;
++
++free_list:
++	
++	for (i = 0; i < n; i++) {
++		free(namelist[i]);
++	}
++	free(namelist);
++
++	return (files);
++}
++
++/*
++ ***************************************************************************
++ * Get persistent name from pretty.
++ *
++ * IN:
++ * @pretty		Pretty name (e.g. sda, sda1, ..).
++ *
++ * RETURNS:
++ * Persistent name.
++ ***************************************************************************
++*/
++char *get_persistent_name_from_pretty(char *pretty)
++{
++	int i = -1;
++	ssize_t r;
++	char *link, *name;
++	char **persist_names;
++	char target[PATH_MAX];
++	static char persist_name[FILENAME_MAX];
++
++	persist_name[0] = '\0';
++
++	/* Get list of files from persistent type name directory */
++	persist_names = get_persistent_names();
++	if (!persist_names)
++		return (NULL);
++
++	while (persist_names[++i]) {
++		/* Get absolute path for current persistent name */
++		link = get_persistent_name_path(persist_names[i]);
++		if (!link)
++			continue;
++
++		/* Persistent name is usually a symlink: Read it... */
++		r = readlink(link, target, PATH_MAX);
++		if ((r <= 0) || (r >= PATH_MAX))
++			continue;
++
++		target[r] = '\0';
++
++		/* ... and get device pretty name it points at */
++		name = basename(target);
++		if (!name || (name[0] == '\0'))
++			continue;
++
++		if (!strncmp(name, pretty, FILENAME_MAX)) {
++			/* We have found pretty name for current persistent one */
++			strncpy(persist_name, persist_names[i], FILENAME_MAX);
++			persist_name[FILENAME_MAX - 1] = '\0';
++			break;
++		}
++	}
++
++	i = -1;
++	while (persist_names[++i]) {
++		free (persist_names[i]);
++	}
++	free (persist_names);
++
++	if (strlen(persist_name) <= 0)
++		return (NULL);
++
++	return persist_name;
++}
++
++/*
++ ***************************************************************************
++ * Get pretty name from persistent.
++ *
++ * IN:
++ * @persistent		Persistent name.
++ *
++ * RETURNS:
++ * Pretty name.
++ ***************************************************************************
++*/
++char *get_pretty_name_from_persistent(char *persistent)
++{
++	ssize_t r;
++	char *link, *pretty, target[PATH_MAX];
++
++	/* Get absolute path for persistent name */
++	link = get_persistent_name_path(persistent);
++	if (!link)
++		return (NULL);
++
++	/* Persistent name is usually a symlink: Read it... */
++	r = readlink(link, target, PATH_MAX);
++	if ((r <= 0) || (r >= PATH_MAX))
++		return (NULL);
++
++	target[r] = '\0';
++
++	/* ... and get device pretty name it points at */
++	pretty = basename(target);
++	if (!pretty || (pretty[0] == '\0'))
++		return (NULL);
++
++	return pretty;
++}
+diff -up sysstat-9.0.4/common.h.persistent sysstat-9.0.4/common.h
+--- sysstat-9.0.4/common.h.persistent	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/common.h	2012-08-06 15:46:46.794163891 +0200
+@@ -48,6 +48,7 @@
+ #define INTERRUPTS	"/proc/interrupts"
+ #define MEMINFO		"/proc/meminfo"
+ #define SYSFS_BLOCK	"/sys/block"
++#define SYSFS_DEV_BLOCK		"/sys/dev/block"
+ #define SYSFS_DEVCPU	"/sys/devices/system/cpu"
+ #define NFSMOUNTSTATS	"/proc/self/mountstats"
+ #define S_STAT		"stat"
+@@ -128,6 +129,9 @@ extern unsigned int kb_shift;
+ #define KB_TO_PG(k)	((k) >> kb_shift)
+ #define PG_TO_KB(k)	((k) << kb_shift)
+ 
++/* Type of persistent device names used in sar and iostat. */
++extern char persistent_name_type[MAX_FILE_LEN];
++
+ /*
+  ***************************************************************************
+  * Structures definitions
+@@ -190,5 +194,13 @@ extern void
+ 	print_version(void);
+ extern void
+ 	sysstat_panic(const char *, int);
++extern char *
++	strtolower(char *);
++extern char *
++	get_persistent_type_dir(char *);
++extern char *
++	get_persistent_name_from_pretty(char *);
++extern char *
++	get_pretty_name_from_persistent(char *);
+ 
+ #endif  /* _COMMON_H */
+diff -up sysstat-9.0.4/iostat.c.persistent sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4/iostat.c.persistent	2012-08-06 15:46:46.774162449 +0200
++++ sysstat-9.0.4/iostat.c	2012-08-06 16:54:40.707731130 +0200
+@@ -83,6 +83,7 @@ void usage(char *progname)
+ 
+ 	fprintf(stderr, _("Options are:\n"
+ 			  "[ -c ] [ -d ] [ -N ] [ -n ] [ -h ] [ -k | -m ] [ -t ] [ -V ] [ -x ] [ -z ]\n"
++			  "[ -j { ID | LABEL | PATH | UUID | ... } [ <device> [...] | ALL ] ]\n"
+ 			  "[ <device> [...] | ALL ] [ -p [ <device> [,...] | ALL ] ]\n"));
+ 	exit(1);
+ }
+@@ -1253,6 +1254,7 @@ void write_ext_stat(int curr, unsigned l
+ 		    struct io_hdr_stats *shi, struct io_stats *ioi,
+ 		    struct io_stats *ioj)
+ {
++	char *devname = NULL;
+ 	struct stats_disk sdc, sdp;
+ 	struct ext_disk_stats xds;
+ 	
+@@ -1283,9 +1285,17 @@ void write_ext_stat(int curr, unsigned l
+ 	
+ 	compute_ext_disk_stats(&sdc, &sdp, itv, &xds);
+ 	
++	/* Print device name */
++	if (DISPLAY_PERSIST_NAME_I(flags)) {
++		devname = get_persistent_name_from_pretty(shi->name);
++	}
++	if (!devname) {
++		devname = shi->name;
++	}
++	
+ 	/*      DEV   rrq/s wrq/s   r/s   w/s  rsec  wsec  rqsz  qusz await svctm %util */
+ 	printf("%-13s %8.2f %8.2f %7.2f %7.2f %8.2f %8.2f %8.2f %8.2f %7.2f %6.2f %6.2f\n",
+-	       shi->name,
++	       devname,
+ 	       S_VALUE(ioj->rd_merges, ioi->rd_merges, itv),
+ 	       S_VALUE(ioj->wr_merges, ioi->wr_merges, itv),
+ 	       S_VALUE(ioj->rd_ios, ioi->rd_ios, itv),
+@@ -1319,9 +1329,18 @@ void write_basic_stat(int curr, unsigned
+ 		      struct io_hdr_stats *shi, struct io_stats *ioi,
+ 		      struct io_stats *ioj)
+ {
++	char *devname = NULL;
+ 	unsigned long long rd_sec, wr_sec;
+ 
+-	printf("%-13s", shi->name);
++	/* Print device name */
++	if (DISPLAY_PERSIST_NAME_I(flags)) {
++		devname = get_persistent_name_from_pretty(shi->name);
++	}
++	if (!devname) {
++		devname = shi->name;
++	}
++
++	printf("%-13s", devname);
+ 
+ 	if (HAS_SYSFS(flags) ||
+ 	    HAS_DISKSTATS(flags) || HAS_PPARTITIONS(flags)) {
+@@ -1646,7 +1665,7 @@ int main(int argc, char **argv)
+ 	struct utsname header;
+ 	struct io_dlist *st_dev_list_i;
+ 	struct tm rectime;
+-	char *t;
++	char *t, *persist_devname, *devname;
+ 
+ #ifdef USE_NLS
+ 	/* Init National Language Support */
+@@ -1676,8 +1695,16 @@ int main(int argc, char **argv)
+ 						flags |= I_D_PART_ALL;
+ 					}
+ 					else {
++						devname = device_name(t);
++						if (DISPLAY_PERSIST_NAME_I(flags)) {
++							/* Get device persistent name */
++							persist_devname = get_pretty_name_from_persistent(devname);
++							if (persist_devname != NULL) {
++								devname = persist_devname;
++							}
++						}
+ 						/* Store device name */
+-						i = update_dev_list(&dlist_idx, device_name(t));
++						i = update_dev_list(&dlist_idx, devname);
+ 						st_dev_list_i = st_dev_list + i;
+ 						st_dev_list_i->disp_part = TRUE;
+ 					}
+@@ -1689,6 +1716,27 @@ int main(int argc, char **argv)
+ 			}
+ 		}
+ 
++		else if (!strcmp(argv[opt], "-j")) {
++			if (argv[++opt]) {
++				if (strnlen(argv[opt], MAX_FILE_LEN) >= MAX_FILE_LEN - 1) {
++					usage(argv[0]);
++				}
++				strncpy(persistent_name_type, argv[opt], MAX_FILE_LEN - 1);
++				persistent_name_type[MAX_FILE_LEN - 1] = '\0';
++				strtolower(persistent_name_type);
++				/* Check that this is a valid type of persistent device name */
++				if (!get_persistent_type_dir(persistent_name_type)) {
++					fprintf(stderr, _("Invalid type of persistent device name\n"));
++					exit(1);
++				}
++				flags |= I_D_PERSIST_NAME;
++				opt++;
++			}
++			else {
++				usage(argv[0]);
++			}
++		}
++
+ 		else if (!strncmp(argv[opt], "-", 1)) {
+ 			for (i = 1; *(argv[opt] + i); i++) {
+ 
+@@ -1765,8 +1813,15 @@ int main(int argc, char **argv)
+ 		else if (!isdigit(argv[opt][0])) {
+ 			flags |= I_D_UNFILTERED;
+ 			if (strcmp(argv[opt], K_ALL)) {
+-				/* Store device name */
+-				update_dev_list(&dlist_idx, device_name(argv[opt++]));
++				/* Store device name entered on the command line */
++				devname = device_name(argv[opt++]);
++				if (DISPLAY_PERSIST_NAME_I(flags)) {
++					persist_devname = get_pretty_name_from_persistent(devname);
++					if (persist_devname != NULL) {
++						devname = persist_devname;
++					}
++				}
++				update_dev_list(&dlist_idx, devname);
+ 			}
+ 			else {
+ 				opt++;
+diff -up sysstat-9.0.4/iostat.h.persistent sysstat-9.0.4/iostat.h
+--- sysstat-9.0.4/iostat.h.persistent	2012-08-06 15:46:46.765161799 +0200
++++ sysstat-9.0.4/iostat.h	2012-08-06 15:46:46.795163963 +0200
+@@ -9,26 +9,27 @@
+ #include "common.h"
+ 
+ /* I_: iostat - D_: Display - F_: Flag */
+-#define I_D_CPU			0x00001
+-#define I_D_DISK		0x00002
+-#define I_D_TIMESTAMP		0x00004
+-#define I_D_EXTENDED		0x00008
+-#define I_D_PART_ALL		0x00010
+-#define I_D_KILOBYTES		0x00020
+-#define I_F_HAS_SYSFS		0x00040
+-#define I_F_OLD_KERNEL		0x00080
+-#define I_D_UNFILTERED		0x00100
+-#define I_D_MEGABYTES		0x00200
+-#define I_D_PARTITIONS		0x00400
+-#define I_F_HAS_DISKSTATS	0x00800
+-#define I_F_HAS_PPARTITIONS	0x01000
+-#define I_F_PLAIN_KERNEL24	0x02000
+-#define I_D_NFS			0x04000
+-#define I_F_HAS_NFS		0x08000
+-#define I_D_DEVMAP_NAME		0x10000
+-#define I_D_ISO			0x20000
+-#define I_D_HUMAN_READ		0x40000
+-#define I_D_ZERO_OMIT		0x80000
++#define I_D_CPU			0x000001
++#define I_D_DISK		0x000002
++#define I_D_TIMESTAMP		0x000004
++#define I_D_EXTENDED		0x000008
++#define I_D_PART_ALL		0x000010
++#define I_D_KILOBYTES		0x000020
++#define I_F_HAS_SYSFS		0x000040
++#define I_F_OLD_KERNEL		0x000080
++#define I_D_UNFILTERED		0x000100
++#define I_D_MEGABYTES		0x000200
++#define I_D_PARTITIONS		0x000400
++#define I_F_HAS_DISKSTATS	0x000800
++#define I_F_HAS_PPARTITIONS	0x001000
++#define I_F_PLAIN_KERNEL24	0x002000
++#define I_D_NFS			0x004000
++#define I_F_HAS_NFS		0x008000
++#define I_D_DEVMAP_NAME		0x010000
++#define I_D_ISO			0x020000
++#define I_D_HUMAN_READ		0x040000
++#define I_D_ZERO_OMIT		0x080000
++#define I_D_PERSIST_NAME	0x100000
+ 
+ #define DISPLAY_CPU(m)		(((m) & I_D_CPU) == I_D_CPU)
+ #define DISPLAY_DISK(m)		(((m) & I_D_DISK) == I_D_DISK)
+@@ -50,6 +51,7 @@
+ #define DISPLAY_ISO(m)		(((m) & I_D_ISO) == I_D_ISO)
+ #define DISPLAY_HUMAN_READ(m)	(((m) & I_D_HUMAN_READ) == I_D_HUMAN_READ)
+ #define DISPLAY_ZERO_OMIT(m)	(((m) & I_D_ZERO_OMIT) == I_D_ZERO_OMIT)
++#define DISPLAY_PERSIST_NAME_I(m)	(((m) & I_D_PERSIST_NAME) == I_D_PERSIST_NAME)
+ 
+ /* Preallocation constats */
+ #define NR_DEV_PREALLOC		4
+diff -up sysstat-9.0.4/man/iostat.1.persistent sysstat-9.0.4/man/iostat.1
+--- sysstat-9.0.4/man/iostat.1.persistent	2012-08-06 15:46:46.691156457 +0200
++++ sysstat-9.0.4/man/iostat.1	2012-08-06 15:46:46.797164110 +0200
+@@ -3,7 +3,10 @@
+ iostat \- Report Central Processing Unit (CPU) statistics and input/output
+ statistics for devices, partitions and network filesystems (NFS).
+ .SH SYNOPSIS
+-.B iostat [ -c ] [ -d ] [ -N ] [ -n ] [ -h ] [ -k | -m ] [ -t ] [ -V ] [ -x ] [ -z ] [
++.B iostat [ -c ] [ -d ] [ -N ] [ -n ] [ -h ] [ -k | -m ] [ -t ] [ -V ] [ -x ] [ -z ]
++.B [ -j { ID | LABEL | PATH | UUID | ... } [
++.I device
++.B [...] | ALL ] ] [
+ .I device
+ .B [...] | ALL ] [ -p [
+ .I device
+@@ -441,6 +444,14 @@ Display the CPU utilization report.
+ Display the device utilization report.
+ .IP -h
+ Make the NFS report displayed by option -n easier to read by a human.
++.IP "-j { ID | LABEL | PATH | UUID | ... } [ device [...] | ALL ]"
++Display persistent device names. Options
++.BR ID ,
++.BR LABEL ,
++etc. specify the type of the persistent name. These options are not limited,
++only prerequisite is that directory with required persistent names is present in
++.IR /dev/disk .
++Optionally, multiple devices can be specified in the chosen persistent name type.
+ .IP -k
+ Display statistics in kilobytes per second instead of blocks per second.
+ Data displayed are valid only with kernels 2.4 and later.
+@@ -462,7 +473,10 @@ and all its partitions are displayed. La
+ .B ALL
+ keyword indicates that statistics have to be displayed for all the block
+ devices and partitions defined by the system, including those that have
+-never been used.
++never been used. If option
++.B -j
++is defined before this option, devices entered on the command line can be
++specified with the chosen persistent name type.
+ Note that this option works only with post 2.5 kernels.
+ .IP -t
+ Print the time for each report displayed. The timestamp format may depend
+@@ -552,6 +566,9 @@ contains statistics for block devices (p
+ 
+ .I /proc/self/mountstats
+ contains statistics for network filesystems.
++
++.I /dev/disk
++contains persistent device names.
+ .SH AUTHOR
+ Sebastien Godard (sysstat <at> orange.fr)
+ .SH SEE ALSO
+diff -up sysstat-9.0.4/man/sar.in.persistent sysstat-9.0.4/man/sar.in
+--- sysstat-9.0.4/man/sar.in.persistent	2009-05-22 15:38:03.000000000 +0200
++++ sysstat-9.0.4/man/sar.in	2012-08-06 15:46:46.800164326 +0200
+@@ -6,6 +6,7 @@ sar \- Collect, report, or save system a
+ .I interval
+ .B ] [ -m ] [ -p ] [ -q ] [ -r ] [ -R ] [ -S ] [ -t ] [ -u [ ALL ] ]
+ [ -v ] [ -V ] [ -w ] [ -W ] [ -y ]
++.B [ -j { ID | LABEL | PATH | UUID | ... } ]
+ .B [ -n {
+ .I keyword
+ .B [,...] | ALL } ]
+@@ -254,7 +255,8 @@ With recent kernels (post 2.5),
+ .B n
+ is the minor number of the device, but is only a sequence number with
+ pre 2.5 kernels. Device names may also be pretty-printed if option -p
+-is used (see below). Values for fields avgqu-sz, await, svctm and %util
++is used or persistent device names can be printed if option -j is used
++(see below). Values for fields avgqu-sz, await, svctm and %util
+ may be unavailable and displayed as 0.00 with some 2.4 kernels.
+ Note that disk activity depends on sadc options "-S DISK" and "-S XDISK"
+ to be collected. The following values are displayed:
+@@ -350,6 +352,16 @@ the first 16 interrupts are to be report
+ keyword indicates that statistics from all interrupts, including potential
+ APIC interrupt sources, are to be reported.
+ Note that interrupt statistics depend on sadc option "-S INT" to be collected.
++.IP "-j { ID | LABEL | PATH | UUID | ... }"
++Display persistent device names. Use this option in conjunction with option -d.
++Options
++.BR ID ,
++.BR LABEL ,
++etc. specify the type of the persistent name. These options are not limited,
++only prerequisite is that directory with required persistent names is present in
++.IR /dev/disk .
++If persistent name is not found for the device, the device name
++is pretty-printed (see option -p below).
+ .IP -m
+ Report power management statistics.
+ Note that these statistics depend on sadc option "-S POWER" to be collected.
+diff -up sysstat-9.0.4/prf_stats.c.persistent sysstat-9.0.4/prf_stats.c
+--- sysstat-9.0.4/prf_stats.c.persistent	2009-07-18 15:19:58.000000000 +0200
++++ sysstat-9.0.4/prf_stats.c	2012-08-06 17:32:02.912573987 +0200
+@@ -862,7 +862,7 @@ __print_funct_t render_disk_stats(struct
+ 	int i, j;
+ 	struct stats_disk *sdc,	*sdp;
+ 	struct ext_disk_stats xds;
+-	char *dev_name;
++	char *dev_name, *persist_dev_name;
+ 	int pt_newlin
+ 		= (DISPLAY_HORIZONTALLY(flags) ? PT_NOFLAG : PT_NEWLIN);
+ 
+@@ -880,14 +880,24 @@ __print_funct_t render_disk_stats(struct
+ 		compute_ext_disk_stats(sdc, sdp, itv, &xds);
+ 
+ 		dev_name = NULL;
++		persist_dev_name = NULL;
+ 
+-		if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
+-			dev_name = transform_devmapname(sdc->major, sdc->minor);
++		if (DISPLAY_PERSIST_NAME_S(flags)) {
++			persist_dev_name = get_persistent_name_from_pretty(get_devname(sdc->major, sdc->minor, TRUE));
+ 		}
++		
++		if (persist_dev_name) {
++			dev_name = persist_dev_name;
++		}
++		else {
++			if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
++				dev_name = transform_devmapname(sdc->major, sdc->minor);
++			}
+ 
+-		if (!dev_name) {
+-			dev_name = get_devname(sdc->major, sdc->minor,
+-					       USE_PRETTY_OPTION(flags));
++			if (!dev_name) {
++				dev_name = get_devname(sdc->major, sdc->minor,
++						       USE_PRETTY_OPTION(flags));
++			}
+ 		}
+ 
+ 		render(isdb, pre, PT_NOFLAG,
+@@ -2778,7 +2788,7 @@ __print_funct_t xml_print_disk_stats(str
+ 	int i, j;
+ 	struct stats_disk *sdc,	*sdp;
+ 	struct ext_disk_stats xds;
+-	char *dev_name;
++	char *dev_name, *persist_dev_name;
+ 
+ 	xprintf(tab, "<disk per=\"second\">");
+ 	tab++;
+@@ -2797,14 +2807,24 @@ __print_funct_t xml_print_disk_stats(str
+ 		compute_ext_disk_stats(sdc, sdp, itv, &xds);
+ 		
+ 		dev_name = NULL;
++		persist_dev_name = NULL;
+ 
+-		if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
+-			dev_name = transform_devmapname(sdc->major, sdc->minor);
++		if (DISPLAY_PERSIST_NAME_S(flags)) {
++			persist_dev_name = get_persistent_name_from_pretty(get_devname(sdc->major, sdc->minor, TRUE));
+ 		}
++		
++		if (persist_dev_name) {
++			dev_name = persist_dev_name;
++		}
++		else {
++			if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
++				dev_name = transform_devmapname(sdc->major, sdc->minor);
++			}
+ 
+-		if (!dev_name) {
+-			dev_name = get_devname(sdc->major, sdc->minor,
+-					       USE_PRETTY_OPTION(flags));
++			if (!dev_name) {
++				dev_name = get_devname(sdc->major, sdc->minor,
++						       USE_PRETTY_OPTION(flags));
++			}
+ 		}
+ 
+ 		xprintf(tab, "<disk-device dev=\"%s\" "
+diff -up sysstat-9.0.4/pr_stats.c.persistent sysstat-9.0.4/pr_stats.c
+--- sysstat-9.0.4/pr_stats.c.persistent	2012-08-06 15:46:46.753160934 +0200
++++ sysstat-9.0.4/pr_stats.c	2012-08-06 17:29:26.007140832 +0200
+@@ -775,7 +775,7 @@ __print_funct_t print_disk_stats(struct 
+ 	int i, j;
+ 	struct stats_disk *sdc,	*sdp;
+ 	struct ext_disk_stats xds;
+-	char *dev_name;
++	char *dev_name, *persist_dev_name;
+ 
+ 	if (dis) {
+ 		printf("\n%-11s       DEV       tps  rd_sec/s  wr_sec/s  avgrq-sz"
+@@ -797,14 +797,24 @@ __print_funct_t print_disk_stats(struct 
+ 		compute_ext_disk_stats(sdc, sdp, itv, &xds);
+ 		
+ 		dev_name = NULL;
++		persist_dev_name = NULL;
+ 
+-		if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
+-			dev_name = transform_devmapname(sdc->major, sdc->minor);
++		if (DISPLAY_PERSIST_NAME_S(flags)) {
++			persist_dev_name = get_persistent_name_from_pretty(get_devname(sdc->major, sdc->minor, TRUE));
+ 		}
++		
++		if (persist_dev_name) {
++			dev_name = persist_dev_name;
++		}
++		else {
++			if ((USE_PRETTY_OPTION(flags)) && (sdc->major == DEVMAP_MAJOR)) {
++				dev_name = transform_devmapname(sdc->major, sdc->minor);
++			}
+ 
+-		if (!dev_name) {
+-			dev_name = get_devname(sdc->major, sdc->minor,
+-					       USE_PRETTY_OPTION(flags));
++			if (!dev_name) {
++				dev_name = get_devname(sdc->major, sdc->minor,
++						       USE_PRETTY_OPTION(flags));
++			}
+ 		}
+ 
+ 		printf("%-11s %9s %9.2f %9.2f %9.2f %9.2f %9.2f %9.2f %9.2f %9.2f\n",
+diff -up sysstat-9.0.4/sa_common.c.persistent sysstat-9.0.4/sa_common.c
+--- sysstat-9.0.4/sa_common.c.persistent	2012-08-06 15:46:46.699157034 +0200
++++ sysstat-9.0.4/sa_common.c	2012-08-06 17:25:55.677792186 +0200
+@@ -27,6 +27,7 @@
+ #include <unistd.h>	/* For STDOUT_FILENO, among others */
+ #include <dirent.h>
+ #include <fcntl.h>
++#include <libgen.h>
+ #include <sys/types.h>
+ #include <sys/ioctl.h>
+ 
+@@ -112,6 +113,44 @@ void free_structures(struct activity *ac
+ }
+ 
+ /*
++  ***************************************************************************
++  * Try to get device real name from sysfs tree.
++  *
++  * IN:
++  * @major	Major number of the device.
++  * @minor	Minor number of the device.
++  *
++  * RETURNS:
++  * The name of the device, which may be the real name (as it appears in /dev)
++  * or NULL.
++  ***************************************************************************
++  */
++char *get_devname_from_sysfs(unsigned int major, unsigned int minor)
++{
++	static char link[32], target[PATH_MAX];
++	char *devname;
++	ssize_t r;
++
++	snprintf(link, 32, "%s/%d:%d", SYSFS_DEV_BLOCK, major, minor);
++
++	/* Get full path to device knowing its major and minor numbers */
++	r = readlink(link, target, PATH_MAX);
++	if (r <= 0 || r >= PATH_MAX) {
++		return (NULL);
++	}
++
++	target[r] = '\0';
++
++	/* Get device name */
++	devname = basename(target);
++	if (!devname || strnlen(devname, FILENAME_MAX) == 0) {
++		return (NULL);
++	}
++
++	return (devname);
++}
++
++/*
+  ***************************************************************************
+  * Get device real name if possible.
+  * Warning: This routine may return a bad name on 2.4 kernels where
+@@ -138,11 +177,15 @@ char *get_devname(unsigned int major, un
+ 	if (!pretty)
+ 		return (buf);
+ 
++	name = get_devname_from_sysfs(major, minor);
++	if (name != NULL)
++		return (name);
++	
+ 	name = ioc_name(major, minor);
+-	if ((name == NULL) || !strcmp(name, K_NODEV))
+-		return (buf);
++	if ((name != NULL) && strcmp(name, K_NODEV))
++		return (name);
+ 
+-	return (name);
++	return (buf);
+ }
+ 
+ /*
+@@ -1208,6 +1251,31 @@ int parse_sar_opt(char *argv[], int *opt
+ 			*flags |= S_F_DEV_PRETTY;
+ 			break;
+ 
++		case 'j':
++			if (argv[*opt + 1]) {
++				(*opt)++;
++				if (strnlen(argv[*opt], MAX_FILE_LEN) >= MAX_FILE_LEN - 1)
++					return 1;
++
++				strncpy(persistent_name_type, argv[*opt], MAX_FILE_LEN - 1);
++				persistent_name_type[MAX_FILE_LEN - 1] = '\0';
++				strtolower(persistent_name_type);
++				if (!get_persistent_type_dir(persistent_name_type)) {
++					fprintf(stderr, _("Invalid type of persistent device name\n"));
++					return 2;
++				}
++				/*
++				 * If persistent device name doesn't exist for device, use
++				 * its pretty name.
++				 */
++				*flags |= S_F_PERSIST_NAME + S_F_DEV_PRETTY;
++				return 0;
++			}
++			else {
++				return 1;
++			}
++			break;
++
+ 		case 'q':
+ 			SELECT_ACTIVITY(A_QUEUE);
+ 			break;
+diff -up sysstat-9.0.4/sa.h.persistent sysstat-9.0.4/sa.h
+--- sysstat-9.0.4/sa.h.persistent	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/sa.h	2012-08-06 15:46:46.809164976 +0200
+@@ -78,6 +78,7 @@
+ #define S_F_PER_PROC		0x00000400
+ #define S_F_HORIZONTALLY	0x00000800
+ #define S_F_COMMENT		0x00001000
++#define S_F_PERSIST_NAME	0x00002000
+ 
+ #define WANT_SINCE_BOOT(m)	(((m) & S_F_SINCE_BOOT)      == S_F_SINCE_BOOT)
+ #define WANT_SA_ROTAT(m)	(((m) & S_F_SA_ROTAT)        == S_F_SA_ROTAT)
+@@ -92,6 +93,7 @@
+ #define WANT_PER_PROC(m)	(((m) & S_F_PER_PROC)        == S_F_PER_PROC)
+ #define DISPLAY_HORIZONTALLY(m)	(((m) & S_F_HORIZONTALLY)    == S_F_HORIZONTALLY)
+ #define DISPLAY_COMMENT(m)	(((m) & S_F_COMMENT)         == S_F_COMMENT)
++#define DISPLAY_PERSIST_NAME_S(m)	(((m) & S_F_PERSIST_NAME)	== S_F_PERSIST_NAME)
+ 
+ /* Output flags for options -R / -r / -S */
+ #define AO_F_MEM_DIA		0x00000001
+diff -up sysstat-9.0.4/sar.c.persistent sysstat-9.0.4/sar.c
+--- sysstat-9.0.4/sar.c.persistent	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/sar.c	2012-08-06 15:46:46.811165121 +0200
+@@ -105,7 +105,7 @@ void usage(char *progname)
+ 			  "[ -A ] [ -b ] [ -B ] [ -C ] [ -d ] [ -h ] [ -m ] [ -p ] [ -q ] [ -r ] [ -R ]\n"
+ 			  "[ -S ] [ -t ] [ -u [ ALL ] ] [ -v ] [ -V ] [ -w ] [ -W ] [ -y ]\n"
+ 			  "[ -I { <int> [,...] | SUM | ALL | XALL } ] [ -P { <cpu> [,...] | ALL } ]\n"
+-			  "[ -n { <keyword> [,...] | ALL } ]\n"
++			  "[ -j { ID | LABEL | PATH | UUID | ... } ] [ -n { <keyword> [,...] | ALL } ]\n"
+ 			  "[ -o [ <filename> ] | -f [ <filename> ] ]\n"
+ 			  "[ -i <interval> ] [ -s [ <hh:mm:ss> ] ] [ -e [ <hh:mm:ss> ] ]\n"));
+ 	exit(1);

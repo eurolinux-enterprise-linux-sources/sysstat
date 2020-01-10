@@ -1,0 +1,24 @@
+diff -up sysstat-9.0.4/pr_stats.c.pom sysstat-9.0.4/pr_stats.c
+--- sysstat-9.0.4/pr_stats.c.pom	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/pr_stats.c	2011-01-19 16:46:28.000000000 +0100
+@@ -109,12 +109,18 @@ __print_funct_t print_cpu_stats(struct a
+ 				
+ 				if (!g_itv) {
+ 					/* Current CPU is offline */
++					
+ 					printf("      0.00      0.00      0.00"
+-					       "      0.00      0.00      0.00");
++					       "      0.00      0.00");
+ 					if (DISPLAY_CPU_ALL(a->opt_flags)) {
+ 						printf("      0.00      0.00      0.00");
+ 					}
+-					printf("\n");
++							if (scc->cpu_user    + scc->cpu_nice   + scc->cpu_sys   +
++								scc->cpu_iowait  + scc->cpu_idle   + scc->cpu_steal +
++							scc->cpu_hardirq + scc->cpu_softirq == 0)
++						printf("      0.00\n");
++					else
++						printf("    100.00\n");
+ 					continue;
+ 				}
+ 			}

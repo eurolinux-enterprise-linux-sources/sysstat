@@ -1,0 +1,249 @@
+diff -upr sysstat-9.0.4.old/iostat.c sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4.old/iostat.c	2012-02-15 19:31:25.813904446 +0100
++++ sysstat-9.0.4/iostat.c	2012-02-15 19:39:23.769356096 +0100
+@@ -688,15 +688,15 @@ int read_sysfs_file_stat(int curr, char 
+ 	FILE *fp;
+ 	struct io_stats sdev;
+ 	int i;
+-	unsigned long rd_ios, rd_merges_or_rd_sec, rd_ticks_or_wr_sec, wr_ios;
+-	unsigned long ios_pgr, tot_ticks, rq_ticks, wr_merges, wr_ticks;
++	unsigned int rd_ticks_or_wr_sec, wr_ticks, ios_pgr, tot_ticks, rq_ticks;
++	unsigned long rd_ios, rd_merges_or_rd_sec, wr_ios, wr_merges;
+ 	unsigned long long rd_sec_or_wr_ios, wr_sec;
+ 
+ 	/* Try to read given stat file */
+ 	if ((fp = fopen(filename, "r")) == NULL)
+ 		return 0;
+ 	
+-	i = fscanf(fp, "%lu %lu %llu %lu %lu %lu %llu %lu %lu %lu %lu",
++	i = fscanf(fp, "%lu %lu %llu %u %lu %lu %llu %u %u %u %u",
+ 		   &rd_ios, &rd_merges_or_rd_sec, &rd_sec_or_wr_ios, &rd_ticks_or_wr_sec,
+ 		   &wr_ios, &wr_merges, &wr_sec, &wr_ticks, &ios_pgr, &tot_ticks, &rq_ticks);
+ 
+@@ -880,11 +880,11 @@ void read_diskstats_stat(int curr)
+ 	char *dm_name;
+ 	struct io_stats sdev;
+ 	int i;
+-	unsigned long rd_ios, rd_merges_or_rd_sec, rd_ticks_or_wr_sec, wr_ios;
+-	unsigned long ios_pgr, tot_ticks, rq_ticks, wr_merges, wr_ticks;
++	unsigned long rd_ios, rd_merges_or_rd_sec, wr_ios, wr_merges;
+ 	unsigned long long rd_sec_or_wr_ios, wr_sec;
+ 	char *ioc_dname;
+-	unsigned int major, minor;
++	unsigned int major, minor, rd_ticks_or_wr_sec, wr_ticks;
++	unsigned int ios_pgr, tot_ticks, rq_ticks;
+ 
+ 	/* Every I/O device entry is potentially unregistered */
+ 	set_entries_inactive(iodev_nr, st_hdr_iodev);
+@@ -895,7 +895,7 @@ void read_diskstats_stat(int curr)
+ 	while (fgets(line, 256, fp) != NULL) {
+ 
+ 		/* major minor name rio rmerge rsect ruse wio wmerge wsect wuse running use aveq */
+-		i = sscanf(line, "%u %u %s %lu %lu %llu %lu %lu %lu %llu %lu %lu %lu %lu",
++		i = sscanf(line, "%u %u %s %lu %lu %llu %u %lu %lu %llu %u %u %u %u",
+ 			   &major, &minor, dev_name,
+ 			   &rd_ios, &rd_merges_or_rd_sec, &rd_sec_or_wr_ios, &rd_ticks_or_wr_sec,
+ 			   &wr_ios, &wr_merges, &wr_sec, &wr_ticks, &ios_pgr, &tot_ticks, &rq_ticks);
+@@ -974,11 +974,10 @@ void read_ppartitions_stat(int curr)
+ 	FILE *fp;
+ 	char line[256], dev_name[MAX_NAME_LEN];
+ 	struct io_stats sdev;
+-	unsigned long rd_ios, rd_merges, rd_ticks, wr_ios, wr_merges, wr_ticks;
+-	unsigned long ios_pgr, tot_ticks, rq_ticks;
++	unsigned long rd_ios, rd_merges, wr_ios, wr_merges;
+ 	unsigned long long rd_sec, wr_sec;
+ 	char *ioc_dname, *dm_name;
+-	unsigned int major, minor;
++	unsigned int major, minor, rd_ticks, wr_ticks, ios_pgr, tot_ticks, rq_ticks;
+ 
+ 	/* Every I/O device entry is potentially unregistered */
+ 	set_entries_inactive(iodev_nr, st_hdr_iodev);
+@@ -988,8 +987,8 @@ void read_ppartitions_stat(int curr)
+ 
+ 	while (fgets(line, 256, fp) != NULL) {
+ 		/* major minor #blocks name rio rmerge rsect ruse wio wmerge wsect wuse running use aveq */
+-		if (sscanf(line, "%u %u %*u %s %lu %lu %llu %lu %lu %lu %llu"
+-			   " %lu %lu %lu %lu",
++		if (sscanf(line, "%u %u %*u %s %lu %lu %llu %u %lu %lu %llu"
++			   " %u %u %u %u",
+ 			   &major, &minor, dev_name,
+ 			   &rd_ios, &rd_merges, &rd_sec, &rd_ticks, &wr_ios, &wr_merges,
+ 			   &wr_sec, &wr_ticks, &ios_pgr, &tot_ticks, &rq_ticks) == 14) {
+diff -upr sysstat-9.0.4.old/iostat.h sysstat-9.0.4/iostat.h
+--- sysstat-9.0.4.old/iostat.h	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/iostat.h	2012-02-15 19:39:23.770356126 +0100
+@@ -84,19 +84,19 @@ struct io_stats {
+ 	/* # of read requests merged */
+ 	unsigned long rd_merges		__attribute__ ((packed));
+ 	/* Time of read requests in queue */
+-	unsigned long rd_ticks		__attribute__ ((packed));
++	unsigned int rd_ticks		__attribute__ ((packed));
+ 	/* # of write operations issued to the device */
+ 	unsigned long wr_ios		__attribute__ ((packed));
+ 	/* # of write requests merged */
+ 	unsigned long wr_merges		__attribute__ ((packed));
+ 	/* Time of write requests in queue */
+-	unsigned long wr_ticks		__attribute__ ((packed));
++	unsigned int wr_ticks		__attribute__ ((packed));
+ 	/* # of I/Os in progress */
+-	unsigned long ios_pgr		__attribute__ ((packed));
++	unsigned int ios_pgr		__attribute__ ((packed));
+ 	/* # of ticks total (for this device) for I/O */
+-	unsigned long tot_ticks		__attribute__ ((packed));
++	unsigned int tot_ticks		__attribute__ ((packed));
+ 	/* # of ticks requests spent in queue */
+-	unsigned long rq_ticks		__attribute__ ((packed));
++	unsigned int rq_ticks		__attribute__ ((packed));
+ 	/* # of I/O done since last reboot */
+ 	unsigned long dk_drive		__attribute__ ((packed));
+ 	/* # of blocks read */
+diff -upr sysstat-9.0.4.old/rd_stats.c sysstat-9.0.4/rd_stats.c
+--- sysstat-9.0.4.old/rd_stats.c	2012-02-15 19:31:25.749902536 +0100
++++ sysstat-9.0.4/rd_stats.c	2012-02-15 19:44:02.040798560 +0100
+@@ -544,9 +544,9 @@ void read_diskstats_io(struct stats_io *
+ 				 */
+ 				st_io->dk_drive      += rd_ios + wr_ios;
+ 				st_io->dk_drive_rio  += rd_ios;
+-				st_io->dk_drive_rblk += (unsigned int) rd_sec;
++				st_io->dk_drive_rblk += rd_sec;
+ 				st_io->dk_drive_wio  += wr_ios;
+-				st_io->dk_drive_wblk += (unsigned int) wr_sec;
++				st_io->dk_drive_wblk += wr_sec;
+ 			}
+ 		}
+ 	}
+@@ -589,9 +589,9 @@ void read_ppartitions_io(struct stats_io
+ 				 */
+ 				st_io->dk_drive      += rd_ios + wr_ios;
+ 				st_io->dk_drive_rio  += rd_ios;
+-				st_io->dk_drive_rblk += (unsigned int) rd_sec;
++				st_io->dk_drive_rblk += rd_sec;
+ 				st_io->dk_drive_wio  += wr_ios;
+-				st_io->dk_drive_wblk += (unsigned int) wr_sec;
++				st_io->dk_drive_wblk += wr_sec;
+ 			}
+ 		}
+ 	}
+@@ -626,31 +626,31 @@ void read_stat_io(struct stats_io *st_io
+ 
+ 		if (!strncmp(line, "disk ", 5)) {
+ 			/* Read number of I/O done since the last reboot */
+-			sscanf(line + 5, "%u %u %u %u",
++			sscanf(line + 5, "%llu %u %u %u",
+ 			       &st_io->dk_drive, &u_tmp[0], &u_tmp[1], &u_tmp[2]);
+ 			st_io->dk_drive += u_tmp[0] + u_tmp[1] + u_tmp[2];
+ 		}
+ 		else if (!strncmp(line, "disk_rio ", 9)) {
+ 			/* Read number of read I/O */
+-			sscanf(line + 9, "%u %u %u %u",
++			sscanf(line + 9, "%llu %u %u %u",
+ 			       &st_io->dk_drive_rio, &u_tmp[0], &u_tmp[1], &u_tmp[2]);
+ 			st_io->dk_drive_rio += u_tmp[0] + u_tmp[1] + u_tmp[2];
+ 		}
+ 		else if (!strncmp(line, "disk_wio ", 9)) {
+ 			/* Read number of write I/O */
+-			sscanf(line + 9, "%u %u %u %u",
++			sscanf(line + 9, "%llu %u %u %u",
+ 			       &st_io->dk_drive_wio, &u_tmp[0], &u_tmp[1], &u_tmp[2]);
+ 			st_io->dk_drive_wio += u_tmp[0] + u_tmp[1] + u_tmp[2];
+ 		}
+ 		else if (!strncmp(line, "disk_rblk ", 10)) {
+ 			/* Read number of blocks read from disk */
+-			sscanf(line + 10, "%u %u %u %u",
++			sscanf(line + 10, "%llu %u %u %u",
+ 			       &st_io->dk_drive_rblk, &u_tmp[0], &u_tmp[1], &u_tmp[2]);
+ 			st_io->dk_drive_rblk += u_tmp[0] + u_tmp[1] + u_tmp[2];
+ 		}
+ 		else if (!strncmp(line, "disk_wblk ", 10)) {
+ 			/* Read number of blocks written to disk */
+-			sscanf(line + 10, "%u %u %u %u",
++			sscanf(line + 10, "%llu %u %u %u",
+ 			       &st_io->dk_drive_wblk, &u_tmp[0], &u_tmp[1], &u_tmp[2]);
+ 			st_io->dk_drive_wblk += u_tmp[0] + u_tmp[1] + u_tmp[2];
+ 		}
+@@ -700,9 +700,8 @@ void read_diskstats_disk(struct stats_di
+ 	char dev_name[MAX_NAME_LEN];
+ 	int dsk = 0;
+ 	struct stats_disk *st_disk_i;
+-	unsigned int major, minor;
+-	unsigned long rd_ios, wr_ios, rd_ticks, wr_ticks;
+-	unsigned long tot_ticks, rq_ticks;
++	unsigned int major, minor, rd_ticks, wr_ticks, tot_ticks, rq_ticks;
++	unsigned long rd_ios, wr_ios;
+ 	unsigned long long rd_sec, wr_sec;
+ 
+ 	if ((fp = fopen(DISKSTATS, "r")) == NULL)
+@@ -710,8 +709,8 @@ void read_diskstats_disk(struct stats_di
+ 
+ 	while ((fgets(line, 256, fp) != NULL) && (dsk < nbr)) {
+ 
+-		if (sscanf(line, "%u %u %s %lu %*u %llu %lu %lu %*u %llu"
+-			   " %lu %*u %lu %lu",
++		if (sscanf(line, "%u %u %s %lu %*u %llu %u %lu %*u %llu"
++			   " %u %*u %u %u",
+ 			   &major, &minor, dev_name,
+ 			   &rd_ios, &rd_sec, &rd_ticks, &wr_ios, &wr_sec, &wr_ticks,
+ 			   &tot_ticks, &rq_ticks) == 11) {
+@@ -756,8 +755,8 @@ void read_partitions_disk(struct stats_d
+ 	char line[256];
+ 	int dsk = 0;
+ 	struct stats_disk *st_disk_i;
+-	unsigned int major, minor;
+-	unsigned long rd_ios, wr_ios, rd_ticks, wr_ticks, tot_ticks, rq_ticks;
++	unsigned int major, minor, rd_ticks, wr_ticks, tot_ticks, rq_ticks;
++	unsigned long rd_ios, wr_ios;
+ 	unsigned long long rd_sec, wr_sec;
+ 
+ 	if ((fp = fopen(PPARTITIONS, "r")) == NULL)
+@@ -765,8 +764,8 @@ void read_partitions_disk(struct stats_d
+ 
+ 	while ((fgets(line, 256, fp) != NULL) && (dsk < nbr)) {
+ 
+-		if (sscanf(line, "%u %u %*u %*s %lu %*u %llu %lu %lu %*u %llu"
+-			   " %lu %*u %lu %lu",
++		if (sscanf(line, "%u %u %*u %*s %lu %*u %llu %u %lu %*u %llu"
++			   " %u %*u %u %u",
+ 			   &major, &minor, &rd_ios, &rd_sec, &rd_ticks, &wr_ios,
+ 			   &wr_sec, &wr_ticks, &tot_ticks, &rq_ticks) == 10) {
+ 
+diff -upr sysstat-9.0.4.old/rd_stats.h sysstat-9.0.4/rd_stats.h
+--- sysstat-9.0.4.old/rd_stats.h	2009-07-18 15:19:58.000000000 +0200
++++ sysstat-9.0.4/rd_stats.h	2012-02-15 19:39:23.811357351 +0100
+@@ -133,11 +133,11 @@ struct stats_paging {
+ 
+ /* Structure for I/O and transfer rate statistics */
+ struct stats_io {
+-	unsigned int  dk_drive			__attribute__ ((aligned (4)));
+-	unsigned int  dk_drive_rio		__attribute__ ((packed));
+-	unsigned int  dk_drive_wio		__attribute__ ((packed));
+-	unsigned int  dk_drive_rblk		__attribute__ ((packed));
+-	unsigned int  dk_drive_wblk		__attribute__ ((packed));
++	unsigned long long dk_drive	        __attribute__ ((aligned (16)));
++	unsigned long long dk_drive_rio		__attribute__ ((aligned (16)));
++	unsigned long long dk_drive_wio		__attribute__ ((aligned (16)));
++	unsigned long long dk_drive_rblk    __attribute__ ((aligned (16)));
++	unsigned long long dk_drive_wblk	__attribute__ ((aligned (16)));
+ };
+ 
+ #define STATS_IO_SIZE	(sizeof(struct stats_io))
+@@ -198,13 +198,13 @@ struct stats_serial {
+ struct stats_disk {
+ 	unsigned long long rd_sect	__attribute__ ((aligned (16)));
+ 	unsigned long long wr_sect	__attribute__ ((aligned (16)));
+-	unsigned long rd_ticks		__attribute__ ((aligned (16)));
+-	unsigned long wr_ticks		__attribute__ ((aligned (8)));
+-	unsigned long tot_ticks		__attribute__ ((aligned (8)));
+-	unsigned long rq_ticks		__attribute__ ((aligned (8)));
+-	unsigned long nr_ios		__attribute__ ((aligned (8)));
+-	unsigned int  major		__attribute__ ((aligned (8)));
+-	unsigned int  minor		__attribute__ ((packed));
++	unsigned long long nr_ios	__attribute__ ((aligned (16)));
++	unsigned int rd_ticks		__attribute__ ((aligned (8)));
++	unsigned int wr_ticks		__attribute__ ((aligned (8)));
++	unsigned int tot_ticks		__attribute__ ((aligned (8)));
++	unsigned int rq_ticks		__attribute__ ((aligned (8)));
++	unsigned int major		    __attribute__ ((aligned (8)));
++	unsigned int minor		    __attribute__ ((packed));
+ };
+ 
+ #define STATS_DISK_SIZE	(sizeof(struct stats_disk))

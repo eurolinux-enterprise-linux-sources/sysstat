@@ -1,0 +1,166 @@
+diff -up sysstat-9.0.4/iostat.c.pom sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4/iostat.c.pom	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/iostat.c	2011-03-29 18:37:09.000000000 +0200
+@@ -205,19 +205,17 @@ void salloc_nfs(int ionfs_nr)
+ 
+ 	for (i = 0; i < 2; i++) {
+ 		if ((st_ionfs[i] =
+-		     (struct io_nfs_stats *) malloc(IO_NFS_STATS_SIZE * ionfs_nr)) == NULL) {
++		     (struct io_nfs_stats *) calloc(IO_NFS_STATS_SIZE, ionfs_nr)) == NULL) {
+ 			perror("malloc");
+ 			exit(4);
+ 		}
+-		memset(st_ionfs[i], 0, IO_NFS_STATS_SIZE * ionfs_nr);
+ 	}
+ 
+ 	if ((st_hdr_ionfs =
+-	     (struct io_hdr_stats *) malloc(IO_HDR_STATS_SIZE * ionfs_nr)) == NULL) {
++	     (struct io_hdr_stats *) calloc(IO_HDR_STATS_SIZE, ionfs_nr)) == NULL) {
+ 		perror("malloc");
+ 		exit(4);
+ 	}
+-	memset(st_hdr_ionfs, 0, IO_HDR_STATS_SIZE * ionfs_nr);
+ }
+ 
+ /*
+@@ -428,7 +426,8 @@ void save_stats(char *name, int curr, vo
+ 	/* Look for device or NFS directory in data table */
+ 	for (i = 0; i < ioln_nr; i++) {
+ 		st_hdr_ioln_i = st_hdr_ioln + i;
+-		if (!strcmp(st_hdr_ioln_i->name, name)) {
++		if ((st_hdr_ioln_i->used) && 
++			(!strcmp(st_hdr_ioln_i->name, name))) {
+ 			break;
+ 		}
+ 	}
+@@ -476,6 +475,101 @@ void save_stats(char *name, int curr, vo
+ 
+ /*
+  ***************************************************************************
++ * Save stats for current device, partition or NFS filesystem.
++ *
++ * IN:
++ * @name	Name of the device/partition or NFS filesystem.
++ * @curr	Index in array for current sample statistics.
++ * @st_io	Structure with device, partition or NFS statistics to save.
++ * @ioln_nr	Number of devices and partitions or NFS filesystems.
++ * @st_hdr_ioln	Pointer on structures describing a device/partition or an
++ *		NFS filesystem.
++ *
++ * OUT:
++ * @st_hdr_ioln	Pointer on structures describing a device/partition or an
++ *		NFS filesystem.
++ ***************************************************************************
++ */
++void save_nfs_stats(char *name, int curr, void *st_io)
++{
++	int i, j;
++	struct io_hdr_stats *st_hdr_ionfs_i;
++	struct io_nfs_stats *st_ionfs_i;
++
++	/* Look for device or NFS directory in data table */
++	for (i = 0; i < ionfs_nr; i++) {
++		st_hdr_ionfs_i = st_hdr_ionfs + i;
++		if ((st_hdr_ionfs_i->used) && 
++			(!strcmp(st_hdr_ionfs_i->name, name))) {
++			break;
++		}
++	}
++	if (i == ionfs_nr) {
++		/*
++		 * This is a new device: look for an unused entry to store it.
++		 * Thus we are able to handle dynamically registered devices.
++		 */
++		for (i = 0; i < ionfs_nr; i++) {
++			st_hdr_ionfs_i = st_hdr_ionfs + i;
++			if (!st_hdr_ionfs_i->used) {
++				/* Unused entry found... */
++				st_hdr_ionfs_i->used = TRUE; /* Indicate it is now used */
++				st_hdr_ionfs_i->active = TRUE;
++				strncpy(st_hdr_ionfs_i->name, name, MAX_NAME_LEN - 1);
++				st_ionfs_i = st_ionfs[!curr] + i;
++				memset(st_ionfs_i, 0, IO_NFS_STATS_SIZE);
++				break;
++			}
++		}
++		if (i == ionfs_nr) {
++			/* All entries are used: The number has to be increased */
++			ionfs_nr = ionfs_nr + 5;
++			/* Increase the size of st_hdr_ionfs buffer */
++			if ((st_hdr_ionfs = (struct io_hdr_stats *)
++				realloc(st_hdr_ionfs, ionfs_nr * IO_HDR_STATS_SIZE)) == NULL) {
++				perror("malloc");
++				exit(4);
++			}
++
++			/* Set the new entries inactive */
++			for (j = 0; j < 5; j++) {
++				st_hdr_ionfs_i = st_hdr_ionfs + i + j;
++				st_hdr_ionfs_i->used = FALSE;
++				st_hdr_ionfs_i->active = FALSE;
++			}
++
++			/* Increase the size of st_hdr_ionfs buffer */
++			for (j = 0; j < 2; j++) {
++				if ((st_ionfs[j] = (struct io_nfs_stats *)
++					realloc(st_ionfs[j], ionfs_nr * IO_NFS_STATS_SIZE)) == NULL) {
++					perror("malloc");
++					exit(4);
++				}
++				memset(st_ionfs[j] + i, 0, 5 * IO_NFS_STATS_SIZE);
++			}
++		}
++		/* Now i shows the first unused entry of the new block */
++		st_hdr_ionfs_i = st_hdr_ionfs + i;
++		st_hdr_ionfs_i->used = TRUE; /* Indicate it is now used */
++		st_hdr_ionfs_i->active = TRUE;
++		strcpy(st_hdr_ionfs_i->name, name);
++		st_ionfs_i = st_ionfs[curr] + i;
++		*st_ionfs_i = *((struct io_nfs_stats *) st_io);;
++	} else {
++		st_hdr_ionfs_i = st_hdr_ionfs + i;
++		st_hdr_ionfs_i->used = TRUE;
++		st_hdr_ionfs_i->active = TRUE;
++		st_ionfs_i = st_ionfs[curr] +i;
++		*st_ionfs_i = *((struct io_nfs_stats *) st_io);;
++	}
++	/*
++	 * else it was a new device or NFS directory
++	 * but there was no free structure to store it.
++	 */
++}
++
++/*
++ ***************************************************************************
+  * Read stats from /proc/stat file...
+  * Used to get disk stats if /sys not available.
+  *
+@@ -960,8 +1054,8 @@ void read_nfs_stat(int curr)
+ 	if ((fp = fopen(NFSMOUNTSTATS, "r")) == NULL)
+ 		return;
+ 
+-	sprintf(aux, "%%%ds %%10s %%10s",
+-		MAX_NAME_LEN < 200 ? MAX_NAME_LEN : 200);
++	sprintf(aux, "%%%ds %%9s %%9s",
++		MAX_NAME_LEN < 200 ? MAX_NAME_LEN-1 : 200);
+ 
+ 	while (fgets(line, 256, fp) != NULL) {
+ 
+@@ -1027,7 +1121,7 @@ void read_nfs_stat(int curr)
+ 				}
+ 				else if (!strncmp(operation, "WRITE:", 6)) {
+ 					snfs.nfs_wops = v1;
+-					save_stats(nfs_name, curr, &snfs, ionfs_nr, st_hdr_ionfs);
++					save_nfs_stats(nfs_name, curr, &snfs);
+ 					sw = 0;
+ 				}
+ 			}
+@@ -1431,7 +1525,7 @@ void write_stats(int curr, struct tm *re
+ 		}
+ 
+ 		for (i = 0; i < ionfs_nr; i++, shi++) {
+-			if (shi->used) {
++			if (shi->active) {
+ 	
+ 				ioni = st_ionfs[curr] + i;
+ 				ionj = st_ionfs[!curr] + i;

@@ -1,0 +1,28 @@
+diff -up sysstat-9.0.4/iostat.c.ppp sysstat-9.0.4/iostat.c
+--- sysstat-9.0.4/iostat.c.ppp	2011-05-19 11:36:42.000000000 +0200
++++ sysstat-9.0.4/iostat.c	2011-05-19 11:36:03.000000000 +0200
+@@ -1054,18 +1054,18 @@ void read_nfs_stat(int curr)
+ 	if ((fp = fopen(NFSMOUNTSTATS, "r")) == NULL)
+ 		return;
+ 
+-	sprintf(aux, "%%%ds %%9s %%9s",
++	sprintf(aux, "%%%ds",
+ 		MAX_NAME_LEN < 200 ? MAX_NAME_LEN-1 : 200);
+ 
+ 	while (fgets(line, 256, fp) != NULL) {
+-
+ 		/* read NFS directory name */
+ 		if (!strncmp(line, "device", 6)) {
+ 			sw = 0;
+-			sscanf(line + 6, aux, nfs_name, mount, on);
+-			if ((!strncmp(mount, "mounted", 7)) && (!strncmp(on, "on", 2))) {
++			sscanf(line + 6, aux, nfs_name);
++			
++			sscanf(line + 6, "%*s %9s %9s", mount, on);
++			if ((!strncmp(mount, "mounted", 7)) && (!strncmp(on, "on", 2)))
+ 				sw = 1;
+-			}
+ 		}
+ 
+ 		sscanf(line, "%10s", prefix);
+

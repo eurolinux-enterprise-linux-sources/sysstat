@@ -1,0 +1,33 @@
+diff -upr sysstat-9.0.4.old/sa1.in sysstat-9.0.4/sa1.in
+--- sysstat-9.0.4.old/sa1.in	2012-02-20 17:55:50.319247649 +0100
++++ sysstat-9.0.4/sa1.in	2012-02-20 17:57:18.207861266 +0100
+@@ -6,6 +6,7 @@
+ #@(#) sa1: Collect and store binary data in system activity data file.
+ #
+ HISTORY=0
++SADC_OPTIONS="-S DISK"
+ SYSCONFIG_DIR=@SYSCONFIG_DIR@
+ [ -r ${SYSCONFIG_DIR}/sysstat ] && . ${SYSCONFIG_DIR}/sysstat
+ if [ ${HISTORY} -gt 28 ]
+diff -upr sysstat-9.0.4.old/sysstat.crond.in sysstat-9.0.4/sysstat.crond.in
+--- sysstat-9.0.4.old/sysstat.crond.in	2008-05-13 10:02:17.000000000 +0200
++++ sysstat-9.0.4/sysstat.crond.in	2012-02-20 17:57:18.207861266 +0100
+@@ -1,6 +1,6 @@
+ # Run system activity accounting tool every @CRON_INTERVAL@ minutes
+-*/@CRON_INTERVAL@ * * * * @CRON_OWNER@ @SA_LIB_DIR@/sa1 -S DISK 1 1
+-# 0 * * * * @CRON_OWNER@ @SA_LIB_DIR@/sa1 -S DISK @CRON_INTERVAL_SEC@ @CRON_COUNT@ &
++*/@CRON_INTERVAL@ * * * * @CRON_OWNER@ @SA_LIB_DIR@/sa1 1 1
++# 0 * * * * @CRON_OWNER@ @SA_LIB_DIR@/sa1 @CRON_INTERVAL_SEC@ @CRON_COUNT@ &
+ # Generate a daily summary of process accounting at 23:53
+ 53 23 * * * @CRON_OWNER@ @SA_LIB_DIR@/sa2 -A
+ 
+diff -upr sysstat-9.0.4.old/sysstat.sysconfig.in sysstat-9.0.4/sysstat.sysconfig.in
+--- sysstat-9.0.4.old/sysstat.sysconfig.in	2007-12-15 16:51:10.000000000 +0100
++++ sysstat-9.0.4/sysstat.sysconfig.in	2012-02-20 17:57:18.209861460 +0100
+@@ -8,3 +8,6 @@ HISTORY=@HISTORY@
+ # Compress (using gzip or bzip2) sa and sar files older than (in days):
+ COMPRESSAFTER=@COMPRESSAFTER@
+ 
++# Parameters for the system activity data collector (see sadc manual page)
++# which are used for the generation of log files.
++SADC_OPTIONS="-S DISK"

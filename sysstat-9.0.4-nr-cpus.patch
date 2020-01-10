@@ -1,0 +1,21 @@
+diff -upr sysstat-9.0.4.orig/common.h sysstat-9.0.4/common.h
+--- sysstat-9.0.4.orig/common.h	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/common.h	2012-12-20 13:22:10.144859670 +0100
+@@ -23,14 +23,14 @@
+ #define DISP_HDR	1
+ 
+ /* Maximum number of CPUs */
+-#ifdef __CPU_SETSIZE
++#if defined(__CPU_SETSIZE) && __CPU_SETSIZE > 2048
+ #define NR_CPUS		__CPU_SETSIZE
+ #else
+-#define NR_CPUS		1024
++#define NR_CPUS		2048
+ #endif
+ 
+ /* Maximum number of interrupts */
+-#define NR_IRQS			256
++#define NR_IRQS			1024
+ 
+ /* Size of /proc/interrupts line, CPU data excluded */
+ #define INTERRUPTS_LINE	128

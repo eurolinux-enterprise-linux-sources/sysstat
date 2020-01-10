@@ -1,0 +1,9 @@
+diff -up sysstat-9.0.4/sa2.in.exit-code sysstat-9.0.4/sa2.in
+--- sysstat-9.0.4/sa2.in.exit-code	2009-02-15 15:49:07.000000000 +0100
++++ sysstat-9.0.4/sa2.in	2012-03-28 15:01:17.099332515 +0200
+@@ -60,4 +60,5 @@ for f in `find ${DDIR} \( -name 'sar??' 
+ done
+ cd ${DDIR}
+ rmdir [0-9]????? > /dev/null 2>&1
++exit 0
+ 

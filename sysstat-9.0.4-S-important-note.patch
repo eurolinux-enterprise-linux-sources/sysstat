@@ -1,0 +1,15 @@
+diff -up sysstat-9.0.4/man/sadc.in.S-important-note sysstat-9.0.4/man/sadc.in
+--- sysstat-9.0.4/man/sadc.in.S-important-note	2009-03-22 17:07:44.000000000 +0100
++++ sysstat-9.0.4/man/sadc.in	2012-03-28 14:36:08.522476776 +0200
+@@ -143,6 +143,11 @@ The
+ .B XALL
+ keyword is equivalent to specifying all the keywords above (including
+ keyword extensions) and therefore all possible activities are collected.
++
++Important note: The activities (including optional ones) saved in an existing
++data file prevail over those selected with option -S.
++As a consequence, appending data to an existing data file will result in
++option -S being ignored.
+ .IP -V
+ Print version number then exit.
+ 

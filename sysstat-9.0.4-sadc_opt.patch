@@ -1,0 +1,15 @@
+diff -up sysstat-9.0.4/sa1.in.pom sysstat-9.0.4/sa1.in
+--- sysstat-9.0.4/sa1.in.pom	2009-02-15 15:49:01.000000000 +0100
++++ sysstat-9.0.4/sa1.in	2011-03-31 14:20:27.000000000 +0200
+@@ -38,8 +38,8 @@ then
+ # Note: Stats are written at the end of previous file *and* at the
+ # beginning of the new one (when there is a file rotation) only if
+ # outfile has been specified as '-' on the command line...
+-	exec ${ENDIR}/sadc -F -L 1 1 -
++	exec ${ENDIR}/sadc -F -L ${SADC_OPTIONS} 1 1 -
+ else
+-	exec ${ENDIR}/sadc -F -L $* -
++	exec ${ENDIR}/sadc -F -L ${SADC_OPTIONS} $* -
+ fi
+ 
+diff -up sysstat-9.0.4/sysstat.in.pom sysstat-9.0.4/sysstat.in

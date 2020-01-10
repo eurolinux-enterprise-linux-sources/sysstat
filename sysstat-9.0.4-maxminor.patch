@@ -1,0 +1,12 @@
+diff -up sysstat-9.0.4/ioconf.h.maxminor sysstat-9.0.4/ioconf.h
+--- sysstat-9.0.4/ioconf.h.maxminor	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/ioconf.h	2012-03-28 13:54:23.690830905 +0200
+@@ -13,7 +13,7 @@
+ #define IOC_NAMELEN	31
+ #define IOC_DESCLEN	63
+ #define IOC_DEVLEN	47
+-#define IOC_MAXMINOR	255
++#define IOC_MAXMINOR	2047
+ #define IOC_LINESIZ	255
+ #define IOC_PARTLEN	7
+ #define IOC_FMTLEN	15

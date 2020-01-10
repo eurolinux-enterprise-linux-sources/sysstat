@@ -1,0 +1,174 @@
+diff -up sysstat-9.0.4/man/sar.in.sa-bump sysstat-9.0.4/man/sar.in
+--- sysstat-9.0.4/man/sar.in.sa-bump	2013-08-07 09:40:59.683415096 +0200
++++ sysstat-9.0.4/man/sar.in	2013-08-08 11:52:37.451756168 +0200
+@@ -18,7 +18,7 @@ sar \- Collect, report, or save system a
+ .I filename
+ .B ] | -f [
+ .I filename
+-.B ] ] [ -s [
++.B ] ] [ --legacy ] [ -s [
+ .I hh:mm:ss
+ .B ] ] [ -e [
+ .I hh:mm:ss
+@@ -362,6 +362,24 @@ only prerequisite is that directory with
+ .IR /dev/disk .
+ If persistent name is not found for the device, the device name
+ is pretty-printed (see option -p below).
++.IP --legacy
++Enable reading older
++.IR @SA_DIR@/sa dd
++data files.
++In Red Hat Enterprise Linux 6.3, the sysstat package was updated to version
++9.0.4-20. This update changed the format of
++.IR @SA_DIR@/sa dd
++data files, but unfortunately, the format version was not updated. Because of
++this, sysstat did not restrict reading of data files in old format and while
++interpreting them, some displayed values could have been incorrect. The updated
++sysstat package in Red Hat Enterprise Linux 6.5 contains fixed format version of
++data files and prevents reading data files created by older sysstat packages.
++However, data files created by the sysstat packages from Red Hat Enterprise
++Linux 6.3 and 6.4 are fully compatible with the sysstat package from Red Hat
++Enterprise Linux 6.5. To enable latest sysstat to read older data files, use this
++option. Note that this option allows you to read also data files created on Red
++Hat Enterprise Linux 6.2 and earlier, however, these files are not compatible
++with the latest sysstat package.
+ .IP -m
+ Report power management statistics.
+ Note that these statistics depend on sadc option "-S POWER" to be collected.
+diff -up sysstat-9.0.4/sa_common.c.sa-bump sysstat-9.0.4/sa_common.c
+--- sysstat-9.0.4/sa_common.c.sa-bump	2013-08-07 09:40:59.684415088 +0200
++++ sysstat-9.0.4/sa_common.c	2013-08-08 11:42:11.958384945 +0200
+@@ -974,6 +974,17 @@ void handle_invalid_sa_file(int *fd, str
+ 		fprintf(stderr,
+ 			_("Current sysstat version can no longer read the format of this file (%#x)\n"),
+ 			file_magic->format_magic);
++
++		if (file_magic->format_magic == 0x2170 &&
++				file_magic->sysstat_version == 9 &&
++				file_magic->sysstat_patchlevel == 0 &&
++				file_magic->sysstat_sublevel == 4) {
++			fprintf(stderr,
++				_("Format of this file had been changed in sysstat-9.0.4-20.el6\n"
++						"due to incompatibility of the certain data types with the current kernel.\n"
++						"For more information, please refer to the description of the \"--legacy\"\n"
++						"option in the sar(1) manual page.\n"));
++		}
+ 	}
+ 
+ 	close (*fd);
+@@ -1070,6 +1081,7 @@ void read_file_stat_bunch(struct activit
+  * @ignore	Set to 1 if a true sysstat activity file but with a bad
+  * 		format should not yield an error message. Useful with
+  * 		sadf -H.
++ * @flags	Common flags and system state.
+  *
+  * OUT:
+  * @ifd		System activity data file descriptor
+@@ -1084,7 +1096,7 @@ void read_file_stat_bunch(struct activit
+ void check_file_actlst(int *ifd, char *dfile, struct activity *act[],
+ 		       struct file_magic *file_magic, struct file_header *file_hdr,
+ 		       struct file_activity **file_actlst, unsigned int id_seq[],
+-		       int ignore)
++		       int ignore, unsigned int flags)
+ {
+ 	int i, j, n, p;
+ 	unsigned int a_cpu = FALSE;
+@@ -1109,8 +1121,14 @@ void check_file_actlst(int *ifd, char *d
+ 			/* Don't display error message. This is for sadf -H */
+ 			return;
+ 		else {
+-			/* Display error message and exit */
+-			handle_invalid_sa_file(ifd, file_magic, dfile, n);
++			if (!(file_magic->format_magic == 0x2170 &&
++					file_magic->sysstat_version == 9 &&
++					file_magic->sysstat_patchlevel == 0 &&
++					file_magic->sysstat_sublevel == 4 &&
++					DISPLAY_LEGACY(flags))) {
++				/* Display error message and exit */
++				handle_invalid_sa_file(ifd, file_magic, dfile, n);
++			}
+ 		}
+ 	}
+ 
+diff -up sysstat-9.0.4/sadf.c.sa-bump sysstat-9.0.4/sadf.c
+--- sysstat-9.0.4/sadf.c.sa-bump	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/sadf.c	2013-08-07 09:40:59.688415056 +0200
+@@ -984,7 +984,7 @@ void read_stats_from_file(char dfile[])
+ 	/* Prepare file for reading */
+ 	ignore = (format == S_O_HDR_OPTION);
+ 	check_file_actlst(&ifd, dfile, act, &file_magic, &file_hdr,
+-			  &file_actlst, id_seq, ignore);
++			  &file_actlst, id_seq, ignore, flags);
+ 	
+ 	if (format == S_O_HDR_OPTION) {
+ 		/* Display data file header then exit */
+diff -up sysstat-9.0.4/sa.h.sa-bump sysstat-9.0.4/sa.h
+--- sysstat-9.0.4/sa.h.sa-bump	2013-08-07 09:40:59.684415088 +0200
++++ sysstat-9.0.4/sa.h	2013-08-07 09:40:59.688415056 +0200
+@@ -79,6 +79,7 @@
+ #define S_F_HORIZONTALLY	0x00000800
+ #define S_F_COMMENT		0x00001000
+ #define S_F_PERSIST_NAME	0x00002000
++#define S_F_LEGACY			0x00004000
+ 
+ #define WANT_SINCE_BOOT(m)	(((m) & S_F_SINCE_BOOT)      == S_F_SINCE_BOOT)
+ #define WANT_SA_ROTAT(m)	(((m) & S_F_SA_ROTAT)        == S_F_SA_ROTAT)
+@@ -94,6 +95,7 @@
+ #define DISPLAY_HORIZONTALLY(m)	(((m) & S_F_HORIZONTALLY)    == S_F_HORIZONTALLY)
+ #define DISPLAY_COMMENT(m)	(((m) & S_F_COMMENT)         == S_F_COMMENT)
+ #define DISPLAY_PERSIST_NAME_S(m)	(((m) & S_F_PERSIST_NAME)	== S_F_PERSIST_NAME)
++#define DISPLAY_LEGACY(m)	(((m) & S_F_LEGACY)	== S_F_LEGACY)
+ 
+ /* Output flags for options -R / -r / -S */
+ #define AO_F_MEM_DIA		0x00000001
+@@ -410,7 +412,7 @@ struct activity {
+  * Modified to indicate that the format of the file is
+  * no longer compatible with that of previous sysstat versions.
+  */
+-#define FORMAT_MAGIC	0x2170
++#define FORMAT_MAGIC	0x1170
+ 
+ /* Structure for file magic header data */
+ struct file_magic {
+@@ -677,7 +679,7 @@ extern int
+ extern void
+ 	check_file_actlst(int *, char *, struct activity * [], struct file_magic *,
+ 			  struct file_header *, struct file_activity **,
+-			  unsigned int [], int);
++			  unsigned int [], int, unsigned int);
+ extern unsigned int
+ 	check_net_dev_reg(struct activity *, int, int, unsigned int);
+ extern unsigned int
+diff -up sysstat-9.0.4/sar.c.sa-bump sysstat-9.0.4/sar.c
+--- sysstat-9.0.4/sar.c.sa-bump	2013-08-07 09:40:59.684415088 +0200
++++ sysstat-9.0.4/sar.c	2013-08-07 09:40:59.688415056 +0200
+@@ -106,7 +106,7 @@ void usage(char *progname)
+ 			  "[ -S ] [ -t ] [ -u [ ALL ] ] [ -v ] [ -V ] [ -w ] [ -W ] [ -y ]\n"
+ 			  "[ -I { <int> [,...] | SUM | ALL | XALL } ] [ -P { <cpu> [,...] | ALL } ]\n"
+ 			  "[ -j { ID | LABEL | PATH | UUID | ... } ] [ -n { <keyword> [,...] | ALL } ]\n"
+-			  "[ -o [ <filename> ] | -f [ <filename> ] ]\n"
++			  "[ -o [ <filename> ] | -f [ <filename> ] ] [ --legacy ]\n"
+ 			  "[ -i <interval> ] [ -s [ <hh:mm:ss> ] ] [ -e [ <hh:mm:ss> ] ]\n"));
+ 	exit(1);
+ }
+@@ -834,7 +834,7 @@ void read_stats_from_file(char from_file
+ 
+ 	/* Read file headers and activity list */
+ 	check_file_actlst(&ifd, from_file, act, &file_magic, &file_hdr,
+-			  &file_actlst, id_seq, FALSE);
++			  &file_actlst, id_seq, FALSE, flags);
+ 
+ 	/* Perform required allocations */
+ 	allocate_structures(act);
+@@ -1149,6 +1149,11 @@ int main(int argc, char **argv)
+ 			}
+ 		}
+ 
++		else if (!strcmp(argv[opt], "--legacy")) {
++			flags |= S_F_LEGACY;
++			opt++;
++		}
++
+ 		else if (!strncmp(argv[opt], "-", 1)) {
+ 			/* Other options not previously tested */
+ 			if (parse_sar_opt(argv, &opt, act, &flags, C_SAR)) {
