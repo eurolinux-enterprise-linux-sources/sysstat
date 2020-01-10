@@ -1,0 +1,76 @@
+From 5fff85e970f4c69522c4d4d212c179ab0d8e65d6 Mon Sep 17 00:00:00 2001
+From: Sebastien Godard <sysstat@orange.fr>
+Date: Sun, 27 Feb 2011 16:07:59 +0100
+Subject: [PATCH] iostat incorrectly mapped device-mapper IDs greater than 256.
+ This is now fixed [DEBIAN Bug#614397].
+
+Mail from Robert Luberda <robert@debian.org> (22/02/2011)
+Subject: Fwd: Bug#614397: iostat(from sysstat) doesn't support more
+than 256 device-mapper names
+
+Sebastien,
+
+I'm forwarding a bug report I've got yesterday.
+I can't reproduce it by myself, as I don't use LVM at all, but I've just
+found out that some Debian machines actually do use it, and the device
+numbers on them  starts with 252, so the contents of /dev/mapper looks like:
+
+crw-rw----  1 root root  10, 61 Feb 19 18:43 control
+brw-rw----  1 root disk 252,  0 Feb 19 18:43 vg_$hostname-srv
+
+Regards,
+robert
+
+ ------ Wiadomosc oryginalna ------
+Temat: Bug#614397: iostat(from sysstat) doesn't support more than 256
+device-mapper names
+Odeslano-Data: Mon, 21 Feb 2011 18:27:01 +0000,	Mon, 21 Feb 2011
+18:27:04 +0000
+Odeslano-Od: Adam Heath <doogie@brainfood.com>
+Odeslano-Do: debian-bugs-dist@lists.debian.org
+Odeslano-Kopia: Robert Luberda <robert@debian.org>
+Data: Mon, 21 Feb 2011 12:24:11 -0600
+Nadawca: Adam Heath <doogie@brainfood.com>
+Odpowiedz-Do: Adam Heath <doogie@brainfood.com>, 614397@bugs.debian.org
+Adresat: submit@bugs.debian.org
+
+package: sysstat
+severity: minor
+version: 9.0.6.1-2
+
+iostat tries to do bit-shifting of device ids; this is a big no-no.
+Attached patch at least fixes it for mapping of device-mapper
+names(iostat -N).
+
+I would love to have this go into stable-updates(squeeze), but can
+understand if it's not the type of change that normally would be allowed.
+
+The circumstances of this bug, cause device 256 to map to 0, 257 to
+map to 1, etc.
+
+(cherry picked from commit 497fc3519799aa8813f184c4e3c3ec271e981574)
+
+[msekleta: I had to edit git-am generated patch because it contains actual change twice which confuses patch]
+
+Resolves: #1406452
+
+---
+ ioconf.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ioconf.c b/ioconf.c
+index 22e318f..0640668 100644
+--- a/ioconf.c
++++ b/ioconf.c
+@@ -489,8 +489,8 @@ char *transform_devmapname(unsigned int major, unsigned int minor)
+ 		if (stat(filen, &aux) == 0) {
+ 			/* Get its minor and major numbers */
+ 
+-			dm_major = ((aux.st_rdev >> 8) & 0xff);
+-			dm_minor = (aux.st_rdev & 0xff);
++			dm_major = major(aux.st_rdev);
++			dm_minor = minor(aux.st_rdev);
+ 	
+ 			if ((dm_minor == minor) && (dm_major == major)) {
+ 				strncpy(name, dp->d_name, MAX_NAME_LEN);
+

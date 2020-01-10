@@ -1,6 +1,6 @@
 Name: sysstat
 Version: 9.0.4
-Release: 33%{?dist}
+Release: 33%{?dist}.1
 Summary: The sar and iostat system monitoring commands
 License: GPLv2+
 Group: Applications/System
@@ -86,6 +86,8 @@ Patch39: 0001-cifsiostat-nfsiostat-Fix-output-on-single-core-CPU.patch
 Patch40: 0001-sar-make-buffers-that-hold-timestamps-bigger.patch
 # related to 1363947
 Patch41: 0001-sar-and-pidstat-Check-that-_-Average-string-doesn-t-.patch
+# fixes 1512573
+Patch42: 0001-iostat-incorrectly-mapped-device-mapper-IDs.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
@@ -143,6 +145,7 @@ activity.
 %patch39 -p1 -b .cifs
 %patch40 -p1 -b .timestamps
 %patch41 -p1 -b .gettext-buf
+%patch42 -p1 -b .dm-long
 
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
@@ -200,6 +203,9 @@ rm -rf %{buildroot}
 %{_localstatedir}/log/sa
 
 %changelog
+* Mon Nov 13 2017 Michal Sekletar <msekleta@redhat.com> - 9.0.4-33.1
+- fix mapping of device mapper ids greater than 256 (#1512573)
+
 * Wed Oct 05 2016 Michal Sekletar <msekleta@redhat.com> - 9.0.4-33
 - fix possible buffer overrun (#1363947)
 
