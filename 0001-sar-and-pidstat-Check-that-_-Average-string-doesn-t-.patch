@@ -1,0 +1,52 @@
+From 840001392a383f77079bf41b71128d8edbc77a87 Mon Sep 17 00:00:00 2001
+From: Sebastien Godard <sysstat@orange.fr>
+Date: Tue, 24 May 2011 13:46:17 +0200
+Subject: [PATCH] sar and pidstat: Check that _("Average") string doesn't
+ exceed the size of the timestamp buffer.
+
+One could find something like:
+strcpy(string, _("Average"));
+in pidstat.c and sar.c. Yet, we don't know whether the translation
+message for "Average" will fit in target string buffer. Hence we
+replaced the previous expression with something like:
+strncpy(string, _("Average"), length_of_string_buffer);
+string[lenght_of_string_buffer - 1] = '\0';
+
+Cherry-picked from: a7ae5a673a10e329315bd10f9b9e51d2a9d22369
+Related: #1363947
+---
+ pidstat.c | 3 ++-
+ sar.c     | 3 ++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/pidstat.c b/pidstat.c
+index ba8a5c2..4bc45af 100644
+--- a/pidstat.c
++++ b/pidstat.c
+@@ -1698,7 +1698,8 @@ void write_stats_avg(int curr, int dis)
+ {
+ 	char string[16];
+ 
+-	strcpy(string, _("Average:"));
++	strncpy(string, _("Average:"), 16);
++	string[15] = '\0';
+ 	write_stats_core(2, curr, dis, TRUE, string, string);
+ }
+ 
+diff --git a/sar.c b/sar.c
+index a700637..6fc547e 100644
+--- a/sar.c
++++ b/sar.c
+@@ -362,7 +362,8 @@ void write_stats_avg(int curr, int read_from_file, unsigned int act_id)
+ 	else
+ 		itv = g_itv;
+ 
+-	strcpy(timestamp[curr], _("Average:"));
++	strncpy(timestamp[curr], _("Average:"), TIMESTAMP_LEN);
++	timestamp[curr][TIMESTAMP_LEN - 1] = '\0';
+ 	strcpy(timestamp[!curr], timestamp[curr]);
+ 	
+ 	/* Test stdout */
+-- 
+2.7.4
+

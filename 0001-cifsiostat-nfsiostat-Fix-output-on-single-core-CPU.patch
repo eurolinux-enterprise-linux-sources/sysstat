@@ -1,0 +1,70 @@
+From 065bb5841f6df20d74ab3eab2a5b468adb6b647a Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Wed, 17 Sep 2014 21:16:18 +0200
+Subject: [PATCH] cifsiostat/nfsiostat: Fix output on single core CPU
+
+Uninitialized variable led to wrong numbers being displayed by
+cifsiostat and nfsiostat on single core CPU. On multi core machines
+reported numbers are correct.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+
+Cherry-picked from: 87329f5f7a0c27458320e2f5d42e614a24deb6a5
+Resolves: #1346844
+---
+ cifsiostat.c | 25 ++++++++-----------------
+ 1 file changed, 8 insertions(+), 17 deletions(-)
+
+diff --git a/cifsiostat.c b/cifsiostat.c
+index b16575d..b7e7c8c 100644
+--- a/cifsiostat.c
++++ b/cifsiostat.c
+@@ -43,7 +43,6 @@
+ #define SCCSID "@(#)sysstat-" VERSION ": " __FILE__ " compiled " __DATE__ " " __TIME__
+ char *sccsid(void) { return (SCCSID); }
+ 
+-unsigned long long uptime[2]  = {0, 0};
+ unsigned long long uptime0[2] = {0, 0};
+ struct cifs_stats *st_cifs[2];
+ struct io_hdr_stats *st_hdr_cifs;
+@@ -464,13 +463,8 @@ void write_stats(int curr, struct tm *rectime)
+ 		printf("%s\n", timestamp);
+ 	}
+ 
+-	/* Interval is multiplied by the number of processors */
+-	itv = get_interval(uptime[!curr], uptime[curr]);
+-
+-	if (cpu_nr > 1) {
+-		/* On SMP machines, reduce itv to one processor (see note above) */
+-		itv = get_interval(uptime0[!curr], uptime0[curr]);
+-	}
++	/* Interval of time, reduced to one processor */
++	itv = get_interval(uptime0[!curr], uptime0[curr]);
+ 
+ 	shi = st_hdr_cifs;
+ 
+@@ -504,15 +498,12 @@ void rw_io_stat_loop(long int count, struct tm *rectime)
+ 	setbuf(stdout, NULL);
+ 	
+ 	do {
+-		if (cpu_nr > 1) {
+-			/*
+-			 * Read system uptime (only for SMP machines).
+-			 * Init uptime0. So if /proc/uptime cannot fill it,
+-			 * this will be done by /proc/stat.
+-			 */
+-			uptime0[curr] = 0;
+-			read_uptime(&(uptime0[curr]));
+-		}
++		/* Read system uptime (reduced to one processor) */
++		uptime0[curr] = 0;
++		read_uptime(&(uptime0[curr]));
++		if (!uptime0[curr])
++			/* Cannot read system uptime (/proc/uptime doesn't exist) */
++			exit(2);
+ 
+ 		/* Read CIFS stats */
+ 		read_cifs_stat(curr);
+-- 
+2.7.4
+

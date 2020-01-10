@@ -1,6 +1,6 @@
 Name: sysstat
 Version: 9.0.4
-Release: 31%{?dist}
+Release: 33%{?dist}
 Summary: The sar and iostat system monitoring commands
 License: GPLv2+
 Group: Applications/System
@@ -80,6 +80,12 @@ Patch36: sysstat-9.0.4-rw-await.patch
 Patch37: sysstat-9.0.4-elapsed-time.patch
 # fixes 1308862
 Patch38: sysstat-9.0.4-max-name-len.patch
+# fixes 1346844
+Patch39: 0001-cifsiostat-nfsiostat-Fix-output-on-single-core-CPU.patch
+# fixes 1363947
+Patch40: 0001-sar-make-buffers-that-hold-timestamps-bigger.patch
+# related to 1363947
+Patch41: 0001-sar-and-pidstat-Check-that-_-Average-string-doesn-t-.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
@@ -134,6 +140,10 @@ activity.
 %patch36 -p1 -b .rw-await
 %patch37 -p1 -b .elapsed-time
 %patch38 -p1 -b .max-name-len
+%patch39 -p1 -b .cifs
+%patch40 -p1 -b .timestamps
+%patch41 -p1 -b .gettext-buf
+
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
 
@@ -190,6 +200,13 @@ rm -rf %{buildroot}
 %{_localstatedir}/log/sa
 
 %changelog
+* Wed Oct 05 2016 Michal Sekletar <msekleta@redhat.com> - 9.0.4-33
+- fix possible buffer overrun (#1363947)
+
+* Fri Sep 16 2016 Michal Sekletar <msekleta@redhat.com> - 9.0.4-32
+- cifsiostat: report correct number of open/closed files (#1346844)
+- sar: output timestamps when running with ko_KR.UTF-8 locale (#1363947)
+
 * Tue Mar 08 2016 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-31
 - related: #1224878
   in some corner cases, pidstat could still output values for %% CPU bigger
