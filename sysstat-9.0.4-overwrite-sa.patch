@@ -1,0 +1,80 @@
+diff -upr sysstat-9.0.4.orig/man/sadc.in sysstat-9.0.4/man/sadc.in
+--- sysstat-9.0.4.orig/man/sadc.in	2014-05-23 13:28:26.781590000 +0200
++++ sysstat-9.0.4/man/sadc.in	2014-05-23 13:31:27.272238517 +0200
+@@ -25,6 +25,9 @@ is set to -, then
+ uses the standard system activity daily data file, the
+ .IR @SA_DIR@/sa dd
+ file, where the dd parameter indicates the current day.
++In this case,
++.B sadc
++will overwrite the file if it is from a previous month.
+ By default
+ .B sadc
+ collects all the data available from the kernel.
+diff -upr sysstat-9.0.4.orig/sa1.in sysstat-9.0.4/sa1.in
+--- sysstat-9.0.4.orig/sa1.in	2014-05-23 13:28:26.793590000 +0200
++++ sysstat-9.0.4/sa1.in	2014-05-23 13:31:27.272238517 +0200
+@@ -7,15 +7,15 @@
+ #
+ HISTORY=0
+ SADC_OPTIONS="-S DISK"
++DDIR=@SA_DIR@
++DATE=`date +%d`
++CURRENTFILE=sa${DATE}
++CURRENTDIR=`date +%Y%m`
+ SYSCONFIG_DIR=@SYSCONFIG_DIR@
+ umask 0022
+ [ -r ${SYSCONFIG_DIR}/sysstat ] && . ${SYSCONFIG_DIR}/sysstat
+ if [ ${HISTORY} -gt 28 ]
+ then
+-	CURRENTDIR=`date +%Y%m`
+-	DATE=`date +%d`
+-	CURRENTFILE=sa${DATE}
+-	DDIR=@SA_DIR@
+ 	cd ${DDIR} || exit 1
+ 	[ -d ${CURRENTDIR} ] || mkdir -p ${CURRENTDIR}
+ 	# If ${CURRENTFILE} exists and is a regular file, then make sure
+@@ -30,6 +30,10 @@ then
+ 	# the (new) current file
+ 	rm -f ${CURRENTFILE}
+ 	ln -s ${CURRENTDIR}/${CURRENTFILE} ${CURRENTFILE}
++else
++	# If ${CURRENTFILE} exists, is a regular file and is from a previous
++	# month then delete it so that it is recreated by sadc afresh
++	[ -f ${CURRENTFILE} ] && [ "`date +%Y%m -r ${CURRENTFILE}`" -lt "${CURRENTDIR}" ] && rm -f ${CURRENTFILE}
+ fi
+ ENDIR=@SA_LIB_DIR@
+ cd ${ENDIR}
+diff -upr sysstat-9.0.4.orig/sadc.c sysstat-9.0.4/sadc.c
+--- sysstat-9.0.4.orig/sadc.c	2009-07-18 15:19:57.000000000 +0200
++++ sysstat-9.0.4/sadc.c	2014-05-23 13:31:27.273238509 +0200
+@@ -643,6 +643,7 @@ void open_ofile(int *ofd, char ofile[])
+ {
+ 	struct file_magic file_magic;
+ 	struct file_activity file_act;
++	struct tm rectime;
+ 	ssize_t sz;
+ 	int i, p;
+ 
+@@ -687,6 +688,21 @@ void open_ofile(int *ofd, char ofile[])
+ 			}
+ 
+ 			/*
++			 * If we are using the standard daily data file (file specified
++			 * as "-" on the command line) and it is from a past month,
++			 * then overwrite (truncate) it.
++			 */
++			get_time(&rectime);
++			
++			if (((file_hdr.sa_month != rectime.tm_mon) ||
++			    (file_hdr.sa_year != rectime.tm_year)) &&
++			    WANT_SA_ROTAT(flags)) {
++				close(*ofd);
++				create_sa_file(ofd, ofile);
++				return;
++			}
++
++			/*
+ 			 * OK: It's a true system activity file.
+ 			 * List of activities from the file prevails over that of the user.
+ 			 * So unselect all of them. And reset activity sequence.

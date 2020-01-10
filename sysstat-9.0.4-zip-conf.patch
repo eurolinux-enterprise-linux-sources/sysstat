@@ -1,0 +1,11 @@
+diff -ur sysstat-9.0.4.orig/sysstat.sysconfig.in sysstat-9.0.4/sysstat.sysconfig.in
+--- sysstat-9.0.4.orig/sysstat.sysconfig.in	2014-06-19 14:38:37.037746000 +0200
++++ sysstat-9.0.4/sysstat.sysconfig.in	2014-06-19 14:47:50.760738630 +0200
+@@ -11,3 +11,7 @@
+ # Parameters for the system activity data collector (see sadc manual page)
+ # which are used for the generation of log files.
+ SADC_OPTIONS="-S DISK"
++
++# Compression program to use.
++ZIP="@ZIP@"
++

@@ -1,11 +1,12 @@
 Name: sysstat
 Version: 9.0.4
-Release: 22%{?dist}.1
+Release: 27%{?dist}
 Summary: The sar and iostat system monitoring commands
 License: GPLv2+
 Group: Applications/System
 URL: 	http://perso.orange.fr/sebastien.godard/
 Source: http://perso.orange.fr/sebastien.godard/%{name}-%{version}.tar.bz2
+Source1: sysstat.5
 # fix initscript
 Patch0: sysstat-9.0.4-init_script.patch
 # fixes https://bugzilla.redhat.com/show_bug.cgi?id=545931
@@ -61,8 +62,14 @@ Patch27: sysstat-9.0.4-omit-first-report.patch
 Patch28: sysstat-9.0.4-umask.patch
 # fixes 967386
 Patch29: sysstat-9.0.4-sa-bump.patch
+# fixes 1088998
+Patch30: sysstat-9.0.4-sa2-xz.patch
+# fixes 921612
+Patch31: sysstat-9.0.4-overwrite-sa.patch
+# fixes 1102603
+Patch32: sysstat-9.0.4-zip-conf.patch
 # fixes 1124180
-Patch30: sysstat-9.0.4-dyn-tick.patch
+Patch33: sysstat-9.0.4-dyn-tick.patch
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n) 
 
@@ -108,7 +115,10 @@ activity.
 %patch27 -p1 -b .omit-first-report
 %patch28 -p1 -b .umask
 %patch29 -p1 -b .sa-bump
-%patch30 -p1 -b .dyn-tick
+%patch30 -p1 -b .sa2-xz
+%patch31 -p1 -b .overwrite-sa
+%patch32 -p1 -b .zip-conf
+%patch33 -p1 -b .dyn-tick
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
 
@@ -131,6 +141,9 @@ install -m 0644 sysstat.crond %{buildroot}/%{_sysconfdir}/cron.d/sysstat
 mkdir -p %{buildroot}%{_initrddir}
 install -m 0755 sysstat %{buildroot}%{_initrddir}/
 
+mkdir -p %{buildroot}%{_mandir}/man5/
+install -m 0644 %{SOURCE1} %{buildroot}%{_mandir}/man5/
+
 %find_lang %{name}
 
 %post
@@ -150,21 +163,47 @@ rm -rf %{buildroot}
 %files -f %{name}.lang
 %defattr(-,root,root,-)
 %doc CHANGES COPYING CREDITS README TODO FAQ
-%config(noreplace) %{_sysconfdir}/cron.d/sysstat
+%config(noreplace) %attr(0600,-,-) %{_sysconfdir}/cron.d/sysstat
 %config(noreplace) %{_sysconfdir}/sysconfig/sysstat
 %config(noreplace) %{_sysconfdir}/sysconfig/sysstat.ioconf
 %{_initrddir}/sysstat
 %{_bindir}/*
 %{_libdir}/sa
 %{_mandir}/man1/*
+%{_mandir}/man5/*
 %{_mandir}/man8/*
 %{_localstatedir}/log/sa
 
 %changelog
-* Wed Aug  6 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-22.el6_5.1
-- resolves: #1127069
+* Mon Aug  4 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-27
+- resolves: #1124180
   added workaround for dyn-tick kernel feature which makes /proc/stat file
   unreliable under certain circumstances
+
+* Fri Jun 20 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-26
+- resolves: #1110851
+  added sysstat(5) man page describing /etc/sysconfig/sysstat file
+- resolves: #1102603
+  added possibility to set compress method in /etc/sysconfig/sysstat file
+
+* Fri May 23 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-25
+- related: #921612
+  reverted the boundary when the sa data files are stored in directories
+  and default history value back to 28. Without the revert, backward
+  compatibility could be broken in some cases.
+
+* Thu May 22 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-24
+- resolves: #921612
+  fix issues when sa data files weren't correctly overwritten in some cases.
+  Part of this fix is lowering the line when the sa data files are kept
+  in subfolders (from 28 to 25 days), and because of this, the default history
+  value was also lowered from 28 to 25 days.
+
+* Tue May 13 2014 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-23
+- resolves: #1088998
+  count with xz compressed files as well in sa2 script
+- resolves: #1012575
+  fix file mode of sysstat cron file
 
 * Tue Sep 17 2013 Peter Schiffer <pschiffe@redhat.com> - 9.0.4-22
 - resolves: #996134
