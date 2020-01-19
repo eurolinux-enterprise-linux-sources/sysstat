@@ -1,0 +1,99 @@
+From 446f287e43f87b090c65bb17e397bd5e73101e34 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Thu, 30 May 2013 22:26:18 +0200
+Subject: [PATCH] Handle octal codes in filesystems mount point names
+
+sar -F was unable to get statistics about filesystems whose mount points
+(as given by /etc/mtab file) had octal codes in their names.
+So now sar replaces those octal codes with their corresponding
+characters before trying to collect stats about them.
+
+(cherry picked from commit 919f10827b763d13427672515f18aa27c93c01bf)
+---
+ rd_stats.c | 42 ++++++++++++++++++++++++++++++++++++++++++
+ rd_stats.h |  2 ++
+ 2 files changed, 44 insertions(+)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index 829dae5..c3ef70f 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -42,6 +42,42 @@
+ #define _(string) (string)
+ #endif
+ 
++/*
++ ***************************************************************************
++ * Replace octal codes in string with their corresponding characters.
++ *
++ * IN:
++ * str		String to parse.
++ *
++ * OUT:
++ * @str		String with octal codes replaced with characters.
++ ***************************************************************************
++ */
++void oct2chr(char *str)
++{
++	int i = 0;
++	int j, len;
++	
++	len = strlen(str);
++	
++	while (i < len - 3) {
++		if ((str[i] == '\\') &&
++		    (str[i + 1] >= '0') && (str[i + 1] <= '3') &&
++		    (str[i + 2] >= '0') && (str[i + 2] <= '7') &&
++		    (str[i + 3] >= '0') && (str[i + 3] <= '7')) {
++			/* Octal code found */
++			str[i] = (str[i + 1] - 48) * 64 +
++			         (str[i + 2] - 48) * 8  +
++			         (str[i + 3] - 48);
++			for (j = i + 4; j <= len; j++) {
++				str[j - 3] = str[j];
++			}
++			len -= 3;
++		}
++		i++;
++	}
++}
++
+ /*
+  ***************************************************************************
+  * Read CPU statistics and machine uptime.
+@@ -1893,6 +1929,9 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 			/* Read current filesystem name and mount point */
+ 			sscanf(line, "%71s %127s", fs_name, mountp);
+ 			
++			/* Replace octal codes */
++			oct2chr(mountp);
++			
+ 			if ((statfs(mountp, &buf) < 0) || (!buf.f_blocks))
+ 				continue;
+ 			
+@@ -2354,6 +2393,9 @@ int get_filesystem_nr(void)
+ 			
+ 			/* Read filesystem name and mount point */
+ 			sscanf(line, "%71s %127s", fs_name, mountp);
++
++                        /* Replace octal codes */
++			oct2chr(mountp);
+ 			
+ 			/* Check that total size is not null */
+ 			if (statfs(mountp, &buf) < 0)
+diff --git a/rd_stats.h b/rd_stats.h
+index 3f1edde..279178f 100644
+--- a/rd_stats.h
++++ b/rd_stats.h
+@@ -541,6 +541,8 @@ struct stats_filesystem {
+  ***************************************************************************
+  */
+ 
++extern void
++	oct2chr(char *);
+ extern void
+ 	read_stat_cpu(struct stats_cpu *, int,
+ 		      unsigned long long *, unsigned long long *);
+-- 
+2.14.3
+

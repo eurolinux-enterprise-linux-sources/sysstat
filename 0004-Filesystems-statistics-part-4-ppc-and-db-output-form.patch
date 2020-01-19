@@ -1,0 +1,136 @@
+From b6905bafa7fc82ba22afaeb26ff46c900738e9d4 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Sun, 12 May 2013 15:17:01 +0200
+Subject: [PATCH] Filesystems statistics (part 4): ppc and db output formats
+
+This patch adds ppc and database (CSV) output formats for filesystems
+statistics. These formats can be displayed with sadf options -p and -d.
+
+Also add a new flag (PT_USERND) to the render() function so that
+a statistic value can be rounded to the nearest integer value.
+
+(cherry picked from commit 37e6da76fd59dcdff84e216e2c8ef10c439d9f84)
+---
+ activity.c   |  2 +-
+ rndr_stats.c | 74 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ rndr_stats.h |  1 +
+ 3 files changed, 75 insertions(+), 2 deletions(-)
+
+diff --git a/activity.c b/activity.c
+index b1aba37..734df4a 100644
+--- a/activity.c
++++ b/activity.c
+@@ -1214,7 +1214,7 @@ struct activity filesystem_act = {
+ 	.f_render	= render_filesystem_stats,
+ 	.f_xml_print	= xml_print_filesystem_stats,
+ 	.f_json_print	= json_print_filesystem_stats,
+-	.hdr_line	= "Mbfsfree;Mbfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM",
++	.hdr_line	= "FILESYSTEM,MBfsfree;MBfsused;%fsused;%ufsused;Ifree;Iused;%Iused",
+ 	.name		= "A_FILESYSTEM",
+ #endif
+ 	.nr		= -1,
+diff --git a/rndr_stats.c b/rndr_stats.c
+index 8349e9a..a3dcb22 100644
+--- a/rndr_stats.c
++++ b/rndr_stats.c
+@@ -147,6 +147,9 @@ static void render(int isdb, char *pre, int rflags, const char *pptxt,
+ 	else if (rflags & PT_USESTR) {
+ 		printf("%s%s", seps[isdb], sval);
+ 	}
++	else if (rflags & PT_USERND) {
++		printf("%s%.0f", seps[isdb], dval);
++	}
+ 	else {
+ 		printf("%s%.2f", seps[isdb], dval);
+ 	}
+@@ -2808,5 +2811,74 @@ __print_funct_t render_pwr_usb_stats(struct activity *a, int isdb, char *pre,
+ __print_funct_t render_filesystem_stats(struct activity *a, int isdb, char *pre,
+ 					int curr, unsigned long long itv)
+ {
+-	/* FIXME */
++	int i;
++	struct stats_filesystem *sfc;
++
++	for (i = 0; i < a->nr; i++) {
++		sfc = (struct stats_filesystem *) ((char *) a->buf[curr] + i * a->msize);
++
++		if (!sfc->f_blocks)
++			/* Size of filesystem is null: We are at the end of the list */
++			break;
++
++		render(isdb, pre, PT_USERND,
++		       "%s\tMBfsfree",
++		       "%s",
++		       cons(sv, sfc->fs_name, NOVAL),
++		       NOVAL,
++		       (double) sfc->f_bfree / 1024 / 1024,
++		       NULL);
++
++		render(isdb, pre, PT_USERND,
++		       "%s\tMBfsused",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       NOVAL,
++		       (double) (sfc->f_blocks - sfc->f_bfree) / 1024 / 1024,
++		       NULL);
++
++		render(isdb, pre, PT_NOFLAG,
++		       "%s\t%%fsused",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       NOVAL,
++		       sfc->f_blocks ? SP_VALUE(sfc->f_bfree, sfc->f_blocks, sfc->f_blocks)
++				     : 0.0,
++		       NULL);
++
++		render(isdb, pre, PT_NOFLAG,
++		       "%s\t%%ufsused",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       NOVAL,
++		       sfc->f_blocks ? SP_VALUE(sfc->f_bavail, sfc->f_blocks, sfc->f_blocks)
++				     : 0.0,
++		       NULL);
++
++		render(isdb, pre, PT_USEINT,
++		       "%s\tIfree",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       sfc->f_ffree,
++		       NOVAL,
++		       NULL);
++
++		render(isdb, pre, PT_USEINT,
++		       "%s\tIused",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       sfc->f_files - sfc->f_ffree,
++		       NOVAL,
++		       NULL);
++
++		render(isdb, pre,
++		       (DISPLAY_HORIZONTALLY(flags) ? PT_NOFLAG : PT_NEWLIN),
++		       "%s\t%%Iused",
++		       NULL,
++		       cons(sv, sfc->fs_name, NOVAL),
++		       NOVAL,
++		       sfc->f_files ? SP_VALUE(sfc->f_ffree, sfc->f_files, sfc->f_files)
++				    : 0.0,
++		       NULL);
++	}
+ }
+diff --git a/rndr_stats.h b/rndr_stats.h
+index ff6452a..9de51b2 100644
+--- a/rndr_stats.h
++++ b/rndr_stats.h
+@@ -18,6 +18,7 @@
+ #define PT_USEINT  0x0001	/* Use the integer arg, not double nor string */
+ #define PT_NEWLIN  0x0002	/* Terminate the current output line */
+ #define PT_USESTR  0x0004	/* Use the string arg */
++#define PT_USERND  0x0008	/* Double value, format %.0f */
+ 
+ #define NOVAL      0		/* For placeholder zeros */
+ #define DNOVAL     0.0		/* Wilma!  */
+-- 
+2.14.3
+

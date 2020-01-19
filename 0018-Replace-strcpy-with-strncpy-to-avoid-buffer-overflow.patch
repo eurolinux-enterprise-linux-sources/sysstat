@@ -1,0 +1,148 @@
+From cfaaf34550c5ea92ee9b74d969a0c56c826cd020 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Thu, 11 Aug 2016 09:13:57 +0200
+Subject: [PATCH] Replace strcpy() with strncpy() to avoid buffer overflows
+
+Using strcpy() is not safe since destination buffer may overflow, for
+example if the string being copied doesn't contain a terminator.
+This patch replaces strcpy() with strncpy() to make sure no buffer
+overflows happen.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit 5aa69b67f03c00eded746c819eaa5b74a021ca1b)
+---
+ cifsiostat.c | 3 ++-
+ ioconf.c     | 6 ++++--
+ iostat.c     | 6 ++++--
+ rd_stats.c   | 5 +++--
+ sa_common.c  | 8 ++++----
+ 5 files changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/cifsiostat.c b/cifsiostat.c
+index 09b60b2..bca6576 100644
+--- a/cifsiostat.c
++++ b/cifsiostat.c
+@@ -345,7 +345,8 @@ void read_cifs_stat(int curr)
+ 			else {
+ 				start = 1;
+ 			}
+-			strcpy(cifs_name, name_tmp);
++			strncpy(cifs_name, name_tmp, MAX_NAME_LEN);
++			cifs_name[MAX_NAME_LEN - 1] = '\0';
+ 		}
+ 		else {
+ 			if (!strncmp(line, "Reads:", 6)) {
+diff --git a/ioconf.c b/ioconf.c
+index 0011320..83008b1 100644
+--- a/ioconf.c
++++ b/ioconf.c
+@@ -282,7 +282,8 @@ int ioc_init(void)
+ 			 * exception info
+ 			 */
+ 			xblkp->ext_minor = iocp->ctrlno;
+-			strcpy(xblkp->ext_name, blkp->name);
++			strncpy(xblkp->ext_name, blkp->name, IOC_NAMELEN + 1);
++			xblkp->ext_name[IOC_NAMELEN] = '\0';
+ 			xblkp->ext = 1;
+ 			continue;
+ 		}
+@@ -393,7 +394,8 @@ char *ioc_name(unsigned int major, unsigned int minor)
+ 
+ 	/* Is this an extension record? */
+ 	if (p->blkp->ext && (p->blkp->ext_minor == minor)) {
+-		strcpy(name, p->blkp->ext_name);
++		strncpy(name, p->blkp->ext_name, IOC_DEVLEN + 1);
++		name[IOC_DEVLEN] = '\0';
+ 		return (name);
+ 	}
+ 
+diff --git a/iostat.c b/iostat.c
+index 308a9af..e49daa0 100644
+--- a/iostat.c
++++ b/iostat.c
+@@ -366,7 +366,8 @@ void presave_device_list(void)
+ 
+ 		/* Now save devices and group names in the io_hdr_stats structures */
+ 		for (i = 0; (i < dlist_idx) && (i < iodev_nr); i++, shi++, sdli++) {
+-			strcpy(shi->name, sdli->dev_name);
++			strncpy(shi->name, sdli->dev_name, MAX_NAME_LEN);
++			shi->name[MAX_NAME_LEN - 1] = '\0';
+ 			shi->used = TRUE;
+ 			if (shi->name[0] == ' ') {
+ 				/* Current device name is in fact the name of a group */
+@@ -385,7 +386,8 @@ void presave_device_list(void)
+ 		 * included in that group.
+ 		 */
+ 		shi += iodev_nr - 1;
+-		strcpy(shi->name, group_name);
++		strncpy(shi->name, group_name, MAX_NAME_LEN);
++		shi->name[MAX_NAME_LEN - 1] = '\0';
+ 		shi->used = TRUE;
+ 		shi->status = DISK_GROUP;
+ 	}
+diff --git a/rd_stats.c b/rd_stats.c
+index f288eb8..6aa8698 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -1915,7 +1915,7 @@ void read_bus_usb_dev(struct stats_pwr_usb *st_pwr_usb, int nbr)
+ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ {
+ 	FILE *fp;
+-	char line[512], fs_name[MAX_FS_LEN], mountp[256];
++	char line[512], fs_name[128], mountp[256];
+ 	int fs = 0;
+ 	struct stats_filesystem *st_filesystem_i;
+ 	struct statvfs buf;
+@@ -1955,7 +1955,8 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 			st_filesystem_i->f_bavail = buf.f_bavail * buf.f_frsize;
+ 			st_filesystem_i->f_files  = buf.f_files;
+ 			st_filesystem_i->f_ffree  = buf.f_ffree;
+-			strcpy(st_filesystem_i->fs_name, fs_name);
++			strncpy(st_filesystem_i->fs_name, fs_name, MAX_FS_LEN);
++			st_filesystem_i->fs_name[MAX_FS_LEN - 1] = '\0';
+ 			strncpy(st_filesystem_i->mountp, mountp, MAX_FS_LEN);
+ 			st_filesystem_i->mountp[MAX_FS_LEN - 1] = '\0';
+ 		}
+diff --git a/sa_common.c b/sa_common.c
+index 2206e9f..df7d38d 100644
+--- a/sa_common.c
++++ b/sa_common.c
+@@ -549,7 +549,7 @@ unsigned int check_net_dev_reg(struct activity *a, int curr, int ref,
+ 					 * actually unregistered.
+ 					 */
+ 					memset(sndp, 0, STATS_NET_DEV_SIZE);
+-					strcpy(sndp->interface, sndc->interface);
++					strncpy(sndp->interface, sndc->interface, MAX_IFACE_LEN - 1);
+ 				}
+ 			}
+ 			return index;
+@@ -574,7 +574,7 @@ unsigned int check_net_dev_reg(struct activity *a, int curr, int ref,
+ 	sndp = (struct stats_net_dev *) a->buf[ref] + index;
+ 	/* Since the name is not the same, reset all the structure */
+ 	memset(sndp, 0, STATS_NET_DEV_SIZE);
+-	strcpy(sndp->interface, sndc->interface);
++	strncpy(sndp->interface, sndc->interface, MAX_IFACE_LEN - 1);
+ 
+ 	return  index;
+ }
+@@ -625,7 +625,7 @@ unsigned int check_net_edev_reg(struct activity *a, int curr, int ref,
+ 				 * actually unregistered.
+ 				 */
+ 				memset(snedp, 0, STATS_NET_EDEV_SIZE);
+-				strcpy(snedp->interface, snedc->interface);
++				strncpy(snedp->interface, snedc->interface, MAX_IFACE_LEN - 1);
+ 			}
+ 			return index;
+ 		}
+@@ -649,7 +649,7 @@ unsigned int check_net_edev_reg(struct activity *a, int curr, int ref,
+ 	snedp = (struct stats_net_edev *) a->buf[ref] + index;
+ 	/* Since the name is not the same, reset all the structure */
+ 	memset(snedp, 0, STATS_NET_EDEV_SIZE);
+-	strcpy(snedp->interface, snedc->interface);
++	strncpy(snedp->interface, snedc->interface, MAX_IFACE_LEN - 1);
+ 
+ 	return  index;
+ }
+-- 
+2.14.3
+

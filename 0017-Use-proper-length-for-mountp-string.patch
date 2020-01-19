@@ -1,0 +1,33 @@
+From 41683b8609f5dea3cb3ae791a8889c86c668d205 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Fri, 27 Mar 2015 16:52:27 +0100
+Subject: [PATCH] Use proper length for mountp string
+
+We read 256 chars for the mountpoint name to (try to) be sure to get it
+all, and so ths statvfs() function won't fail in read_filesystem()
+function.
+Yet only MAX_FS_LEN chars should be saved in stats_filesystem structure.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit 7d010b8b3646e1d87427aca13feb16ac890d7c4c)
+---
+ rd_stats.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index cb45d82..f288eb8 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -1956,7 +1956,8 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 			st_filesystem_i->f_files  = buf.f_files;
+ 			st_filesystem_i->f_ffree  = buf.f_ffree;
+ 			strcpy(st_filesystem_i->fs_name, fs_name);
+-			strcpy(st_filesystem_i->mountp, mountp);
++			strncpy(st_filesystem_i->mountp, mountp, MAX_FS_LEN);
++			st_filesystem_i->mountp[MAX_FS_LEN - 1] = '\0';
+ 		}
+ 	}
+ 
+-- 
+2.14.3
+

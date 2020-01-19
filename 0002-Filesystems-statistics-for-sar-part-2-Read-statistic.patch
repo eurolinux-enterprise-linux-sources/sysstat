@@ -1,0 +1,202 @@
+From cea93dc1db568312987814b3cae0a6f837cfaa4e Mon Sep 17 00:00:00 2001
+From: seb <sysstat@orange.fr.fake>
+Date: Sun, 5 May 2013 17:42:03 +0200
+Subject: [PATCH] Filesystems statistics for sar (part 2): Read statistics
+
+This patch reads statistics for mounted filesystems except for
+pseudo-filesystems which are ignored.
+It also determines the number of filesystems for which stats will be
+read.
+Oh, and it adds another field to the stats_filesystem structure so that
+filesystem name can be saved ;-)
+
+(cherry picked from commit 512bf2e7ebfa5e5fec757d96820b0b3f94341797)
+---
+ rd_stats.c | 87 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ rd_stats.h | 17 ++++++++----
+ sa_wrap.c  |  5 ++--
+ 3 files changed, 102 insertions(+), 7 deletions(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index d8c337a..829dae5 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -27,6 +27,7 @@
+ #include <ctype.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
++#include <sys/vfs.h>
+ #include <unistd.h>
+ 
+ #include "common.h"
+@@ -1863,6 +1864,51 @@ void read_bus_usb_dev(struct stats_pwr_usb *st_pwr_usb, int nbr)
+ 	closedir(dir);
+ }
+ 
++/*
++ ***************************************************************************
++ * Read filesystems statistics.
++ *
++ * IN:
++ * @st_filesystem	Structure where stats will be saved.
++ * @nbr			Total number of filesystems.
++ *
++ * OUT:
++ * @st_filesystem	Structure with statistics.
++ ***************************************************************************
++ */
++void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
++{
++	FILE *fp;
++	char line[256], fs_name[MAX_FS_LEN], mountp[128];
++	int fs = 0;
++	struct stats_filesystem *st_filesystem_i;
++	struct statfs buf;
++
++	if ((fp = fopen(MTAB, "r")) == NULL)
++		return;
++
++	while ((fgets(line, 256, fp) != NULL) && (fs < nbr)) {
++		if (line[0] == '/') {
++			
++			/* Read current filesystem name and mount point */
++			sscanf(line, "%71s %127s", fs_name, mountp);
++			
++			if ((statfs(mountp, &buf) < 0) || (!buf.f_blocks))
++				continue;
++			
++			st_filesystem_i = st_filesystem + fs++;
++			st_filesystem_i->f_blocks = buf.f_blocks * buf.f_bsize;
++			st_filesystem_i->f_bfree  = buf.f_bfree * buf.f_bsize;
++			st_filesystem_i->f_bavail = buf.f_bavail * buf.f_bsize;
++			st_filesystem_i->f_files  = buf.f_files;
++			st_filesystem_i->f_ffree  = buf.f_ffree;
++			strcpy(st_filesystem_i->fs_name, fs_name);
++		}
++	}
++
++	fclose(fp);
++}
++
+ /*
+  ***************************************************************************
+  * Read machine uptime, independently of the number of processors.
+@@ -2282,3 +2328,44 @@ int get_usb_nr(void)
+ 
+ 	return usb;
+ }
++
++/*
++ ***************************************************************************
++ * Find number of filesystems in /etc/mtab. Pseudo-filesystems are ignored.
++ *
++ * RETURNS:
++ * Number of filesystems.
++ ***************************************************************************
++ */
++int get_filesystem_nr(void)
++{
++	FILE *fp;
++	char line[256], fs_name[MAX_FS_LEN], mountp[128];
++	int fs = 0;
++	struct statfs buf;
++
++	if ((fp = fopen(MTAB, "r")) == NULL)
++		/* File non-existent */
++		return 0;
++
++	/* Get current filesystem */
++	while (fgets(line, 256, fp) != NULL) {
++		if (line[0] == '/') {
++			
++			/* Read filesystem name and mount point */
++			sscanf(line, "%71s %127s", fs_name, mountp);
++			
++			/* Check that total size is not null */
++			if (statfs(mountp, &buf) < 0)
++				continue;
++			
++			if (buf.f_blocks) {
++				fs++;
++			}
++		}
++	}
++
++	fclose(fp);
++
++	return fs;
++}
+diff --git a/rd_stats.h b/rd_stats.h
+index f941426..3f1edde 100644
+--- a/rd_stats.h
++++ b/rd_stats.h
+@@ -27,6 +27,8 @@
+ #define MAX_MANUF_LEN	24
+ /* Maximum length of USB product string */
+ #define MAX_PROD_LEN	48
++/* Maximum length of filesystem name */
++#define MAX_FS_LEN	72
+ 
+ #define CNT_DEV		0
+ #define CNT_PART	1
+@@ -523,11 +525,12 @@ struct stats_pwr_usb {
+ 
+ /* Structure for filesystems statistics */
+ struct stats_filesystem {
+-	unsigned long long f_blocks	__attribute__ ((aligned (16)));
+-	unsigned long long f_bfree	__attribute__ ((aligned (16)));
+-	unsigned long long f_bavail	__attribute__ ((aligned (16)));
+-	unsigned long long f_files	__attribute__ ((aligned (16)));
+-	unsigned long long f_ffree	__attribute__ ((aligned (16)));
++	unsigned long long f_blocks		__attribute__ ((aligned (16)));
++	unsigned long long f_bfree		__attribute__ ((aligned (16)));
++	unsigned long long f_bavail		__attribute__ ((aligned (16)));
++	unsigned long long f_files		__attribute__ ((aligned (16)));
++	unsigned long long f_ffree		__attribute__ ((aligned (16)));
++	char 		   fs_name[MAX_FS_LEN]	__attribute__ ((aligned (16)));
+ };
+ 
+ #define STATS_FILESYSTEM_SIZE	(sizeof(struct stats_filesystem))
+@@ -607,6 +610,8 @@ extern void
+ 	read_time_in_state(struct stats_pwr_wghfreq *, int, int);
+ extern void
+ 	read_bus_usb_dev(struct stats_pwr_usb *, int);
++extern void
++	read_filesystem(struct stats_filesystem *, int);
+ 
+ /*
+  ***************************************************************************
+@@ -632,5 +637,7 @@ extern int
+ 	get_freq_nr(void);
+ extern int
+ 	get_usb_nr(void);
++extern int
++	get_filesystem_nr(void);
+ 
+ #endif /* _RD_STATS_H */
+diff --git a/sa_wrap.c b/sa_wrap.c
+index 298f889..6a829d7 100644
+--- a/sa_wrap.c
++++ b/sa_wrap.c
+@@ -864,7 +864,7 @@ __read_funct_t wrap_read_filesystem(struct activity *a)
+ 		= (struct stats_filesystem *) a->_buf0;
+ 
+ 	/* Read filesystems from /etc/mtab */
+-	/* FIXME */
++	read_filesystem(st_filesystem, a->nr);
+ 
+ 	return;
+ }
+@@ -1088,7 +1088,8 @@ __nr_t wrap_get_filesystem_nr(struct activity *a)
+ {
+ 	__nr_t n = 0;
+ 
+-	/* FIXME */
++	if ((n = get_filesystem_nr()) > 0)
++		return n + NR_FILESYSTEM_PREALLOC;
+ 
+ 	return 0;
+ }
+-- 
+2.14.3
+

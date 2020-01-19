@@ -1,0 +1,165 @@
+From b3a0f481304e76b5fe3ec69025df20cea16e6f0e Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Sat, 18 May 2013 22:04:27 +0200
+Subject: [PATCH] Filesystems statistics (part 6): XML output format
+
+This patch adds XML output format for filesystems statistics. This
+format can be displayed with sadf option -x.
+DTD and XML Schema (xsd) documents have also been updated.
+
+(cherry picked from commit 1eddc64a1db0efd5cdffd5d272adb9f8d4ccb589)
+---
+ sadf.h                                     |  2 +-
+ xml/{sysstat-2.15.dtd => sysstat-2.16.dtd} | 18 ++++++++++++--
+ xml/sysstat.xsd                            | 22 ++++++++++++++++-
+ xml_stats.c                                | 38 +++++++++++++++++++++++++++++-
+ 4 files changed, 75 insertions(+), 5 deletions(-)
+ rename xml/{sysstat-2.15.dtd => sysstat-2.16.dtd} (96%)
+
+diff --git a/sadf.h b/sadf.h
+index 786d3b0..198568a 100644
+--- a/sadf.h
++++ b/sadf.h
+@@ -9,7 +9,7 @@
+ #include "sa.h"
+ 
+ /* DTD version for XML output */
+-#define XML_DTD_VERSION	"2.15"
++#define XML_DTD_VERSION	"2.16"
+ 
+ /* Possible actions for functions used to display reports */
+ #define F_BEGIN	0x01
+diff --git a/xml/sysstat-2.15.dtd b/xml/sysstat-2.16.dtd
+similarity index 96%
+rename from xml/sysstat-2.15.dtd
+rename to xml/sysstat-2.16.dtd
+index e0b7bfb..06faed2 100644
+--- a/xml/sysstat-2.15.dtd
++++ b/xml/sysstat-2.16.dtd
+@@ -1,11 +1,11 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+-<!--DTD v2.15 for sysstat. See sadf.h -->
++<!--DTD v2.16 for sysstat. See sadf.h -->
+ 
+ <!ELEMENT sysstat (sysdata-version, host)>
+ 
+ <!ELEMENT sysdata-version (#PCDATA)>
+ 
+-<!ENTITY % TIMESTAMP_ELEMENTS "cpu-load|cpu-load-all|process-and-context-switch|interrupts|swap-pages|paging|io|memory|hugepages|kernel|queue|serial|disk|network|power-management">
++<!ENTITY % TIMESTAMP_ELEMENTS "cpu-load|cpu-load-all|process-and-context-switch|interrupts|swap-pages|paging|io|memory|hugepages|kernel|queue|serial|disk|network|power-management|filesystems">
+ <!ENTITY % HOST_ELEMENTS "sysname|release|machine|number-of-cpus|file-date|statistics|restarts|comments">
+ 
+ <!ELEMENT host (%HOST_ELEMENTS;)+>
+@@ -551,3 +551,17 @@
+ 	manufact CDATA #REQUIRED
+ 	product CDATA #REQUIRED
+ >
++
++<!ELEMENT filesystems (filesystem+)>
++
++<!ELEMENT filesystem EMPTY>
++<!ATTLIST filesystem
++	fsname CDATA #REQUIRED
++	MBfsfree CDATA #REQUIRED
++	MBfsused CDATA #REQUIRED
++	fsused-percent CDATA #REQUIRED
++	ufsused-percent CDATA #REQUIRED
++	Ifree CDATA #REQUIRED
++	Iused CDATA #REQUIRED
++	Iused-percent CDATA #REQUIRED
++>
+diff --git a/xml/sysstat.xsd b/xml/sysstat.xsd
+index 8304ac5..09818f6 100644
+--- a/xml/sysstat.xsd
++++ b/xml/sysstat.xsd
+@@ -1,7 +1,7 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns="http://pagesperso-orange.fr/sebastien.godard/sysstat" targetNamespace="http://pagesperso-orange.fr/sebastien.godard/sysstat" elementFormDefault="qualified">
+ <xs:annotation>
+-	<xs:appinfo>-- XML Schema v2.15 for sysstat. See sadf.h --</xs:appinfo>
++	<xs:appinfo>-- XML Schema v2.16 for sysstat. See sadf.h --</xs:appinfo>
+ </xs:annotation>
+ 
+ <xs:element name="sysstat" type="sysstat-type"></xs:element>
+@@ -97,6 +97,7 @@
+ 		<xs:element name="disk" type="disk-type"></xs:element>
+ 		<xs:element name="network" type="network-type"></xs:element>
+ 		<xs:element name="power-management" type="power-management-type"></xs:element>
++		<xs:element name="filesystems" type="filesystems-type"></xs:element>
+ 	</xs:sequence>
+ 	<xs:attribute name="date" type="xs:date"></xs:attribute>
+ 	<xs:attribute name="time" type="xs:time"></xs:attribute>
+@@ -723,4 +724,23 @@
+ 	<xs:attribute name="product" type="xs:string"></xs:attribute>
+ </xs:complexType>
+ 
++<xs:element name="filesystems" type="filesystems-type"></xs:element>
++<xs:complexType name="filesystems-type">
++	<xs:sequence>
++		<xs:element name="filesystem" type="filesystem-type"></xs:element>
++	</xs:sequence>
++</xs:complexType>
++
++<xs:element name="filesystem" type="filesystem-type"></xs:element>
++<xs:complexType name="filesystem-type">
++	<xs:attribute name="fsname" type="xs:string"></xs:attribute>
++	<xs:attribute name="MBfsfree" type="xs:nonNegativeInteger"></xs:attribute>
++	<xs:attribute name="MBfsused" type="xs:nonNegativeInteger"></xs:attribute>
++	<xs:attribute name="fsused-percent" type="hundredth-type"></xs:attribute>
++	<xs:attribute name="ufsused-percent" type="hundredth-type"></xs:attribute>
++	<xs:attribute name="Ifree" type="xs:nonNegativeInteger"></xs:attribute>
++	<xs:attribute name="Iused" type="xs:nonNegativeInteger"></xs:attribute>
++	<xs:attribute name="Iused-percent" type="hundredth-type"></xs:attribute>
++</xs:complexType>
++
+ </xs:schema>
+diff --git a/xml_stats.c b/xml_stats.c
+index 0a15f98..f41d520 100644
+--- a/xml_stats.c
++++ b/xml_stats.c
+@@ -2005,5 +2005,41 @@ close_xml_markup:
+ __print_funct_t xml_print_filesystem_stats(struct activity *a, int curr, int tab,
+ 					   unsigned long long itv)
+ {
+-	/* FIXME */
++	int i;
++	struct stats_filesystem *sfc;
++
++	xprintf(tab, "<filesystems>");
++	tab++;
++
++	for (i = 0; i < a->nr; i++) {
++
++		sfc = (struct stats_filesystem *) ((char *) a->buf[curr] + i * a->msize);
++
++		if (!sfc->f_blocks)
++			/* Size of filesystem is null: We are at the end of the list */
++			break;
++
++		xprintf(tab, "<filesystem fsname=\"%s\" "
++			"MBfsfree=\"%.0f\" "
++			"MBfsused=\"%.0f\" "
++			"fsused-percent=\"%.2f\" "
++			"ufsused-percent=\"%.2f\" "
++			"Ifree=\"%llu\" "
++			"Iused=\"%llu\" "
++			"Iused-percent=\"%.2f\"/>",
++			sfc->fs_name,
++			(double) sfc->f_bfree / 1024 / 1024,
++			(double) (sfc->f_blocks - sfc->f_bfree) / 1024 / 1024,
++			/* f_blocks is not null. But test it anyway ;-) */
++			sfc->f_blocks ? SP_VALUE(sfc->f_bfree, sfc->f_blocks, sfc->f_blocks)
++				      : 0.0,
++			sfc->f_blocks ? SP_VALUE(sfc->f_bavail, sfc->f_blocks, sfc->f_blocks)
++				      : 0.0,
++			sfc->f_ffree,
++			sfc->f_files - sfc->f_ffree,
++			sfc->f_files ? SP_VALUE(sfc->f_ffree, sfc->f_files, sfc->f_files)
++				     : 0.0);
++	}
++
++	xprintf(--tab, "</filesystems>");
+ }
+-- 
+2.14.3
+

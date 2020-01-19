@@ -1,0 +1,167 @@
+From b8eaf0cce7cbed0eb56e9fc509961269d718d096 Mon Sep 17 00:00:00 2001
+From: Steve Kay <stevekay@gmail.com>
+Date: Fri, 13 Mar 2015 15:24:10 -0700
+Subject: [PATCH] Add option to display mountpoint names instead of filesystem
+ names.
+
+(cherry picked from commit d91ecce584d7dedf194714a4d189ecfba6276f6c)
+---
+ man/sar.in  | 23 ++++++++++++++---------
+ pr_stats.c  | 11 ++++++-----
+ rd_stats.c  |  1 +
+ rd_stats.h  |  1 +
+ sa.h        |  5 +++++
+ sa_common.c |  6 ++++++
+ sar.c       |  5 +++--
+ 7 files changed, 36 insertions(+), 16 deletions(-)
+
+diff --git a/man/sar.in b/man/sar.in
+index 6d964b3..4ea6ca0 100644
+--- a/man/sar.in
++++ b/man/sar.in
+@@ -315,17 +315,22 @@ value is close to 100%.
+ Set the ending time of the report. The default ending time is
+ 18:00:00. Hours must be given in 24-hour format.
+ This option can be used when data are read from
+-or written to a file (options
+-.B -f
+-or
+-.B -o
+-).
+-.IP -F
++or written to a file (options -f or -o).
++.IP "-F [ MOUNT ]"
+ Display statistics for currently mounted filesystems. Pseudo-filesystems are
+-ignored. At the end of the report,
+-.B sar
++ignored.  At the end of the report, 
++.B sar 
+ will display a summary of all those filesystems.
+-Note that filesystems statistics depend on sadc option "-S XDISK" to be collected.
++Note that filesystems statistics depend on
++.B sadc
++option
++.B "-S XDISK"
++to be collected.
++Use of the 
++.B MOUNT
++parameter keyword indicates that mountpoint will be reported instead of 
++filesystem device.
++
+ The following values are displayed:
+ 
+ .B MBfsfree
+diff --git a/pr_stats.c b/pr_stats.c
+index d1edb5b..5bee25f 100644
+--- a/pr_stats.c
++++ b/pr_stats.c
+@@ -2454,11 +2454,11 @@ __print_funct_t stub_print_filesystem_stats(struct activity *a, int curr, int di
+ 	int i, j;
+ 	struct stats_filesystem *sfc, *sfm;
+ 
+-	
+ 	if (dis) {
+ 		printf("\n%-11s  MBfsfree  MBfsused   %%fsused  %%ufsused"
+-		       "     Ifree     Iused    %%Iused FILESYSTEM\n",
+-		       (dispavg ? _("Summary") : timestamp[!curr]));
++		       "     Ifree     Iused    %%Iused %s\n",
++		       (dispavg ? _("Summary:") : timestamp[!curr]),
++		       DISPLAY_MOUNT(a->opt_flags) ? _("MOUNTPOINT") : _("FILESYSTEM"));
+ 	}
+ 
+ 	for (i = 0; i < a->nr; i++) {
+@@ -2482,8 +2482,9 @@ __print_funct_t stub_print_filesystem_stats(struct activity *a, int curr, int di
+ 		       sfc->f_files - sfc->f_ffree,
+ 		       sfc->f_files ? SP_VALUE(sfc->f_ffree, sfc->f_files, sfc->f_files)
+ 				    : 0.0,
+-		       sfc->fs_name);
+-		
++
++		       DISPLAY_MOUNT(a->opt_flags) ? sfc->mountp : sfc->fs_name);
++
+ 		if (!dispavg) {
+ 			/* Save current filesystem in summary list */
+ 			for (j = 0; j < a->nr; j++) {
+diff --git a/rd_stats.c b/rd_stats.c
+index c3ef70f..24a98f7 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -1942,6 +1942,7 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 			st_filesystem_i->f_files  = buf.f_files;
+ 			st_filesystem_i->f_ffree  = buf.f_ffree;
+ 			strcpy(st_filesystem_i->fs_name, fs_name);
++			strcpy(st_filesystem_i->mountp, mountp);
+ 		}
+ 	}
+ 
+diff --git a/rd_stats.h b/rd_stats.h
+index 279178f..d958104 100644
+--- a/rd_stats.h
++++ b/rd_stats.h
+@@ -531,6 +531,7 @@ struct stats_filesystem {
+ 	unsigned long long f_files		__attribute__ ((aligned (16)));
+ 	unsigned long long f_ffree		__attribute__ ((aligned (16)));
+ 	char 		   fs_name[MAX_FS_LEN]	__attribute__ ((aligned (16)));
++	char 		   mountp[MAX_FS_LEN]	__attribute__ ((aligned (16)));
+ };
+ 
+ #define STATS_FILESYSTEM_SIZE	(sizeof(struct stats_filesystem))
+diff --git a/sa.h b/sa.h
+index eb2a426..7d24f2d 100644
+--- a/sa.h
++++ b/sa.h
+@@ -129,6 +129,11 @@
+ 
+ #define COLLECT_PARTITIONS(m)	(((m) & AO_F_DISK_PART)   == AO_F_DISK_PART)
+ 
++/* Output flags for option -F */
++#define AO_F_MOUNT		0x00000001
++
++#define DISPLAY_MOUNT(m)	(((m) & AO_F_MOUNT)       == AO_F_MOUNT)
++
+ /*
+  ***************************************************************************
+  * Various keywords and constants.
+diff --git a/sa_common.c b/sa_common.c
+index 3ccf24b..2206e9f 100644
+--- a/sa_common.c
++++ b/sa_common.c
+@@ -1284,6 +1284,12 @@ int parse_sar_opt(char *argv[], int *opt, struct activity *act[],
+ 
+ 		case 'F':
+ 			SELECT_ACTIVITY(A_FILESYSTEM);
++			p = get_activity_position(act, A_FILESYSTEM);
++			if (!*(argv[*opt] + i + 1) && argv[*opt + 1] && !strcmp(argv[*opt + 1], "MOUNT")) {
++				(*opt)++;
++				act[p]->opt_flags |= AO_F_MOUNT;
++				return 0;
++			}
+ 			break;
+ 			
+ 		case 'H':
+diff --git a/sar.c b/sar.c
+index 2674810..5dfd915 100644
+--- a/sar.c
++++ b/sar.c
+@@ -107,7 +107,7 @@ void usage(char *progname)
+ {
+ 	print_usage_title(stderr, progname);
+ 	fprintf(stderr, _("Options are:\n"
+-			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
++			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F [ MOUNTS ] ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
+ 			  "[ -r ] [ -S ] [ -t ] [ -u [ ALL ] ] [ -V ] [ -v ] [ -W ] [ -w ] [ -y ]\n"
+ 			  "[ -I { <int> [,...] | SUM | ALL | XALL } ] [ -P { <cpu> [,...] | ALL } ]\n"
+ 			  "[ -m { <keyword> [,...] | ALL } ] [ -n { <keyword> [,...] | ALL } ]\n"
+@@ -132,7 +132,8 @@ void display_help(char *progname)
+ 	printf(_("\t-b\tI/O and transfer rate statistics\n"));
+ 	printf(_("\t-B\tPaging statistics\n"));
+ 	printf(_("\t-d\tBlock device statistics\n"));
+-	printf(_("\t-F\tFilesystems statistics\n"));
++	printf(_("\t-F [ MOUNTS ]\n"));
++	printf(_("\t\tFilesystems statistics\n"));
+ 	printf(_("\t-H\tHugepages utilization statistics\n"));
+ 	printf(_("\t-I { <int> | SUM | ALL | XALL }\n"
+ 		 "\t\tInterrupts statistics\n"));
+-- 
+2.14.3
+

@@ -1,0 +1,121 @@
+From 3cba36331dd2ebd2fd6e34b63a1ed5036823c256 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Wed, 12 Jun 2013 21:39:19 +0200
+Subject: [PATCH] Collect filesystems stats only when sadc option "-S XDISK" is
+ used
+
+Make sadc collect filesystems statistics (those displayed by sar option
+-F) only when option "-S XDISK" is used.
+Filesystems are actually closer to partitions than to disks. So it makes
+more sense for sadc to collect them when option "-S XDISK" is used
+rather than option "-S DISK".
+Update sadc and sar manual pages to reflect the change.
+
+(cherry picked from commit 7557dfebffc9e6de26ff7a6b715792dfa5a715c1)
+---
+ activity.c  |  2 +-
+ man/sadc.in |  4 ++--
+ man/sar.in  |  5 +++--
+ sa.h        |  1 +
+ sadc.c      | 14 +++++++++++---
+ 5 files changed, 18 insertions(+), 8 deletions(-)
+
+diff --git a/activity.c b/activity.c
+index 734df4a..5b0d4a0 100644
+--- a/activity.c
++++ b/activity.c
+@@ -1200,7 +1200,7 @@ struct activity filesystem_act = {
+ 	.id		= A_FILESYSTEM,
+ 	.options	= AO_NULL,
+ 	.magic		= ACTIVITY_MAGIC_BASE,
+-	.group		= G_DISK,
++	.group		= G_XDISK,
+ #ifdef SOURCE_SADC
+ 	.f_count	= wrap_get_filesystem_nr,
+ 	.f_count2	= NULL,
+diff --git a/man/sadc.in b/man/sadc.in
+index 9b75754..2e18999 100644
+--- a/man/sadc.in
++++ b/man/sadc.in
+@@ -1,4 +1,4 @@
+-.TH SADC 8 "JULY 2012" Linux "Linux User's Manual" -*- nroff -*-
++.TH SADC 8 "JUNE 2013" Linux "Linux User's Manual" -*- nroff -*-
+ .SH NAME
+ sadc \- System activity data collector.
+ .SH SYNOPSIS
+@@ -138,7 +138,7 @@ The
+ .B XDISK
+ keyword is an extension to the
+ .B DISK
+-one and indicates that partition statistics should be collected by
++one and indicates that partitions and filesystems statistics should be collected by
+ .B sadc
+ in addition to disk statistics. This option works only with kernels 2.6.25
+ and later.
+diff --git a/man/sar.in b/man/sar.in
+index 65c89cb..6f96093 100644
+--- a/man/sar.in
++++ b/man/sar.in
+@@ -324,8 +324,9 @@ or
+ Display statistics for currently mounted filesystems. Pseudo-filesystems are
+ ignored. At the end of the report,
+ .B sar
+-will display a summary of all those filesystems. The following values are
+-displayed:
++will display a summary of all those filesystems.
++Note that filesystems statistics depend on sadc option "-S XDISK" to be collected.
++The following values are displayed:
+ 
+ .B MBfsfree
+ .RS
+diff --git a/sa.h b/sa.h
+index 50349c8..eb2a426 100644
+--- a/sa.h
++++ b/sa.h
+@@ -177,6 +177,7 @@
+ #define G_SNMP		0x04
+ #define G_IPV6		0x08
+ #define G_POWER		0x10
++#define G_XDISK		0x20
+ 
+ /* sadc program */
+ #define SADC		"sadc"
+diff --git a/sadc.c b/sadc.c
+index 73c15fa..39c95ee 100644
+--- a/sadc.c
++++ b/sadc.c
+@@ -137,8 +137,8 @@ void parse_sadc_S_option(char *argv[], int opt)
+ 			collect_group_activities(G_DISK, AO_F_NULL);
+ 		}
+ 		else if (!strcmp(p, K_XDISK)) {
+-			/* Select group of disk and partition activities */
+-			collect_group_activities(G_DISK, AO_F_DISK_PART);
++			/* Select group of disk and partition/filesystem activities */
++			collect_group_activities(G_DISK + G_XDISK, AO_F_DISK_PART);
+ 		}
+ 		else if (!strcmp(p, K_SNMP)) {
+ 			/* Select group of SNMP activities */
+@@ -155,11 +155,19 @@ void parse_sadc_S_option(char *argv[], int opt)
+ 		else if (!strcmp(p, K_ALL) || !strcmp(p, K_XALL)) {
+ 			/* Select all activities */
+ 			for (i = 0; i < NR_ACT; i++) {
++
++				if (!strcmp(p, K_ALL) && (act[i]->group & G_XDISK))
++					/*
++					 * Don't select G_XDISK activities
++					 * when option -S ALL is used.
++					 */
++					continue;
++
+ 				act[i]->options |= AO_COLLECTED;
+ 			}
+ 			if (!strcmp(p, K_XALL)) {
+ 				/* Tell sadc to also collect partition statistics */
+-				collect_group_activities(G_DISK, AO_F_DISK_PART);
++				collect_group_activities(G_DISK + G_XDISK, AO_F_DISK_PART);
+ 			}
+ 		}
+ 		else if (strspn(argv[opt], DIGITS) == strlen(argv[opt])) {
+-- 
+2.14.3
+

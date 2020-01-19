@@ -1,0 +1,30 @@
+From 1952d089631dae9bfdd158343a97346fca6fd034 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Wed, 26 Jun 2013 21:53:04 +0200
+Subject: [PATCH] Small fix for "sar -A" in sar manual page
+
+Indicate that filesystems statistics are also included in stats
+displayed by sar -A (that is to say: option -F is also set when sar -A
+is entered on the command line).
+
+(cherry picked from commit 43a66c5dfffd5e7e524a7c307da9078588f612eb)
+---
+ man/sar.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/man/sar.in b/man/sar.in
+index 6f96093..6d964b3 100644
+--- a/man/sar.in
++++ b/man/sar.in
+@@ -145,7 +145,7 @@ command only reports on local activities.
+ .SH OPTIONS
+ .IP -A
+ This is equivalent to specifying
+-.BR "-bBdHqrRSuvwWy -I SUM -I XALL -m ALL -n ALL -u ALL -P ALL".
++.BR "-bBdFHqrRSuvwWy -I SUM -I XALL -m ALL -n ALL -u ALL -P ALL".
+ .IP -B
+ Report paging statistics.
+ The following values are displayed:
+-- 
+2.14.3
+

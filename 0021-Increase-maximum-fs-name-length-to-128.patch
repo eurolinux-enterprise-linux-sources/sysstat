@@ -1,0 +1,29 @@
+From 781b16fc258de2d5f4e4fd6e096ce3d7b70caa51 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Fri, 20 Mar 2015 17:10:16 +0100
+Subject: [PATCH] Increase maximum fs name length to 128
+
+Previous value was 72 and was considered a bit too small.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit 81d449c28e69ca4fce6009f32e3846bdc892ff64)
+---
+ rd_stats.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rd_stats.h b/rd_stats.h
+index d958104..9519f13 100644
+--- a/rd_stats.h
++++ b/rd_stats.h
+@@ -28,7 +28,7 @@
+ /* Maximum length of USB product string */
+ #define MAX_PROD_LEN	48
+ /* Maximum length of filesystem name */
+-#define MAX_FS_LEN	72
++#define MAX_FS_LEN	128
+ 
+ #define CNT_DEV		0
+ #define CNT_PART	1
+-- 
+2.14.3
+

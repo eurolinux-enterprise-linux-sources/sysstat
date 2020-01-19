@@ -1,0 +1,452 @@
+From a0e0995fec1286374ffe260843fdb9b7b01f98fa Mon Sep 17 00:00:00 2001
+From: seb <sysstat@orange.fr.fake>
+Date: Mon, 29 Apr 2013 22:04:43 +0200
+Subject: [PATCH] Added filesystems statistics to sar (part 1): Basic
+ definitions and structures
+
+A new option (-F) has been added to sar. This option tells sar to display
+filesystems statistics.
+This first patch adds the corresponding structures, constants and the new
+functions prototypes.
+sar's help and usage messages have also been updated.
+
+(cherry picked from commit fe061c6377d8b4550b794f4bf7d6d0ca6d4de34b)
+---
+ activity.c   | 34 +++++++++++++++++++++++++++++++++-
+ json_stats.c | 17 +++++++++++++++++
+ json_stats.h |  2 ++
+ pr_stats.c   | 53 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ pr_stats.h   |  4 ++++
+ rd_stats.h   | 12 ++++++++++++
+ rndr_stats.c | 18 ++++++++++++++++++
+ rndr_stats.h |  2 ++
+ sa.h         |  8 +++++++-
+ sa_common.c  |  4 ++++
+ sa_wrap.c    | 43 +++++++++++++++++++++++++++++++++++++++++++
+ sar.c        |  3 ++-
+ xml_stats.c  | 19 ++++++++++++++++++-
+ xml_stats.h  |  2 ++
+ 14 files changed, 217 insertions(+), 4 deletions(-)
+
+diff --git a/activity.c b/activity.c
+index 103df7a..b1aba37 100644
+--- a/activity.c
++++ b/activity.c
+@@ -1195,6 +1195,37 @@ struct activity pwr_usb_act = {
+ 	.bitmap		= NULL
+ };
+ 
++/* Filesystem usage activity */
++struct activity filesystem_act = {
++	.id		= A_FILESYSTEM,
++	.options	= AO_NULL,
++	.magic		= ACTIVITY_MAGIC_BASE,
++	.group		= G_DISK,
++#ifdef SOURCE_SADC
++	.f_count	= wrap_get_filesystem_nr,
++	.f_count2	= NULL,
++	.f_read		= wrap_read_filesystem,
++#endif
++#ifdef SOURCE_SAR
++	.f_print	= print_filesystem_stats,
++	.f_print_avg	= print_avg_filesystem_stats,
++#endif
++#ifdef SOURCE_SADF
++	.f_render	= render_filesystem_stats,
++	.f_xml_print	= xml_print_filesystem_stats,
++	.f_json_print	= json_print_filesystem_stats,
++	.hdr_line	= "Mbfsfree;Mbfsused;%fsused;%ufsused;Ifree;Iused;%Iused;FILESYSTEM",
++	.name		= "A_FILESYSTEM",
++#endif
++	.nr		= -1,
++	.nr2		= 1,
++	.fsize		= STATS_FILESYSTEM_SIZE,
++	.msize		= STATS_FILESYSTEM_SIZE,
++	.opt_flags	= 0,
++	.buf		= {NULL, NULL, NULL},
++	.bitmap		= NULL
++};
++
+ 
+ /*
+  * Array of activities.
+@@ -1239,6 +1270,7 @@ struct activity *act[NR_ACT] = {
+ 	&pwr_temp_act,
+ 	&pwr_in_act,
+ 	&pwr_wghfreq_act,
+-	&pwr_usb_act		/* AO_CLOSE_MARKUP */
++	&pwr_usb_act,		/* AO_CLOSE_MARKUP */
+ 	/* </power-management> */
++	&filesystem_act
+ };
+diff --git a/json_stats.c b/json_stats.c
+index a75b422..10d88e9 100644
+--- a/json_stats.c
++++ b/json_stats.c
+@@ -2085,3 +2085,20 @@ close_json_markup:
+ 		json_markup_power_management(tab, CLOSE_JSON_MARKUP);
+ 	}
+ }
++
++/*
++ ***************************************************************************
++ * Display filesystems statistics in JSON.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @curr	Index in array for current sample statistics.
++ * @tab		Indentation in output.
++ * @itv		Interval of time in jiffies.
++ ***************************************************************************
++ */
++__print_funct_t json_print_filesystem_stats(struct activity *a, int curr, int tab,
++					    unsigned long long itv)
++{
++	/* FIXME */
++}
+diff --git a/json_stats.h b/json_stats.h
+index 9f80445..9244931 100644
+--- a/json_stats.h
++++ b/json_stats.h
+@@ -87,5 +87,7 @@ extern __print_funct_t json_print_pwr_wghfreq_stats
+ 	(struct activity *, int, int, unsigned long long);
+ extern __print_funct_t json_print_pwr_usb_stats
+ 	(struct activity *, int, int, unsigned long long);
++extern __print_funct_t json_print_filesystem_stats
++	(struct activity *, int, int, unsigned long long);
+ 
+ #endif /* _XML_STATS_H */
+diff --git a/pr_stats.c b/pr_stats.c
+index ab1b841..332b10e 100644
+--- a/pr_stats.c
++++ b/pr_stats.c
+@@ -2437,3 +2437,56 @@ __print_funct_t print_avg_pwr_usb_stats(struct activity *a, int prev, int curr,
+ {
+ 	stub_print_pwr_usb_stats(a, 2, TRUE);
+ }
++
++/*
++ ***************************************************************************
++ * Display filesystems statistics. This function is used to
++ * display instantaneous and average statistics.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @prev	Index in array where stats used as reference are.
++ * @curr	Index in array for current sample statistics.
++ * @itv		Interval of time in jiffies.
++ * @dispavg	TRUE if displaying average statistics.
++ ***************************************************************************
++ */
++__print_funct_t stub_print_filesystem_stats(struct activity *a, int prev, int curr,
++					    unsigned long long itv, int dispavg)
++{
++	/* FIXME */
++}
++
++/*
++ ***************************************************************************
++ * Display filesystems statistics.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @prev	Index in array where stats used as reference are.
++ * @curr	Index in array for current sample statistics.
++ * @itv		Interval of time in jiffies.
++ ***************************************************************************
++ */
++__print_funct_t print_filesystem_stats(struct activity *a, int prev, int curr,
++				       unsigned long long itv)
++{
++	stub_print_filesystem_stats(a, prev, curr, itv, FALSE);
++}
++
++/*
++ ***************************************************************************
++ * Display average filesystems statistics.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @prev	Index in array where stats used as reference are.
++ * @curr	Index in array for current sample statistics.
++ * @itv		Interval of time in jiffies.
++ ***************************************************************************
++ */
++__print_funct_t print_avg_filesystem_stats(struct activity *a, int prev, int curr,
++					   unsigned long long itv)
++{
++	stub_print_filesystem_stats(a, prev, curr, itv, TRUE);
++}
+diff --git a/pr_stats.h b/pr_stats.h
+index 0f54aab..52007f8 100644
+--- a/pr_stats.h
++++ b/pr_stats.h
+@@ -88,6 +88,8 @@ extern __print_funct_t print_pwr_wghfreq_stats
+ 	(struct activity *, int, int, unsigned long long);
+ extern __print_funct_t print_pwr_usb_stats
+ 	(struct activity *, int, int, unsigned long long);
++extern __print_funct_t print_filesystem_stats
++	(struct activity *, int, int, unsigned long long);
+ 
+ /* Functions used to display average statistics */
+ extern __print_funct_t print_avg_memory_stats
+@@ -112,5 +114,7 @@ extern __print_funct_t print_avg_huge_stats
+ 	(struct activity *, int, int, unsigned long long);
+ extern __print_funct_t print_avg_pwr_usb_stats
+ 	(struct activity *, int, int, unsigned long long);
++extern __print_funct_t print_avg_filesystem_stats
++	(struct activity *, int, int, unsigned long long);
+ 
+ #endif /* _PR_STATS_H */
+diff --git a/rd_stats.h b/rd_stats.h
+index 967f584..f941426 100644
+--- a/rd_stats.h
++++ b/rd_stats.h
+@@ -56,6 +56,7 @@
+ #define NET_SNMP	"/proc/net/snmp"
+ #define NET_SNMP6	"/proc/net/snmp6"
+ #define CPUINFO		"/proc/cpuinfo"
++#define MTAB		"/etc/mtab"
+ 
+ 
+ /*
+@@ -520,6 +521,17 @@ struct stats_pwr_usb {
+ 
+ #define STATS_PWR_USB_SIZE	(sizeof(struct stats_pwr_usb))
+ 
++/* Structure for filesystems statistics */
++struct stats_filesystem {
++	unsigned long long f_blocks	__attribute__ ((aligned (16)));
++	unsigned long long f_bfree	__attribute__ ((aligned (16)));
++	unsigned long long f_bavail	__attribute__ ((aligned (16)));
++	unsigned long long f_files	__attribute__ ((aligned (16)));
++	unsigned long long f_ffree	__attribute__ ((aligned (16)));
++};
++
++#define STATS_FILESYSTEM_SIZE	(sizeof(struct stats_filesystem))
++
+ /*
+  ***************************************************************************
+  * Prototypes for functions used to read system statistics
+diff --git a/rndr_stats.c b/rndr_stats.c
+index 4195103..8349e9a 100644
+--- a/rndr_stats.c
++++ b/rndr_stats.c
+@@ -2792,3 +2792,21 @@ __print_funct_t render_pwr_usb_stats(struct activity *a, int isdb, char *pre,
+ 		       suc->product);
+ 	}
+ }
++
++/*
++ ***************************************************************************
++ * Display filesystems statistics in selected format.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @isdb	Flag, true if db printing, false if ppc printing.
++ * @pre		Prefix string for output entries
++ * @curr	Index in array for current sample statistics.
++ * @itv		Interval of time in jiffies.
++ ***************************************************************************
++ */
++__print_funct_t render_filesystem_stats(struct activity *a, int isdb, char *pre,
++					int curr, unsigned long long itv)
++{
++	/* FIXME */
++}
+diff --git a/rndr_stats.h b/rndr_stats.h
+index dbced25..ff6452a 100644
+--- a/rndr_stats.h
++++ b/rndr_stats.h
+@@ -117,5 +117,7 @@ extern __print_funct_t render_pwr_wghfreq_stats
+ 	(struct activity *, int, char *, int, unsigned long long);
+ extern __print_funct_t render_pwr_usb_stats
+ 	(struct activity *, int, char *, int, unsigned long long);
++extern __print_funct_t render_filesystem_stats
++	(struct activity *, int, char *, int, unsigned long long);
+ 
+ #endif /* _RNDR_STATS_H */
+diff --git a/sa.h b/sa.h
+index c11dbe9..50349c8 100644
+--- a/sa.h
++++ b/sa.h
+@@ -19,7 +19,7 @@
+  */
+ 
+ /* Number of activities */
+-#define NR_ACT	36
++#define NR_ACT	37
+ 
+ /* Activities */
+ #define A_CPU		1
+@@ -58,6 +58,7 @@
+ #define A_HUGE		34
+ #define A_PWR_WGHFREQ	35
+ #define A_PWR_USB	36
++#define A_FILESYSTEM	37
+ 
+ 
+ /* Macro used to flag an activity that should be collected */
+@@ -197,6 +198,7 @@
+ #define NR_DISK_PREALLOC	3
+ #define NR_FREQ_PREALLOC	0
+ #define NR_USB_PREALLOC		5
++#define NR_FILESYSTEM_PREALLOC	3
+ 
+ #define UTSNAME_LEN		65
+ #define TIMESTAMP_LEN		64
+@@ -706,6 +708,8 @@ extern __nr_t
+ 	wrap_get_freq_nr(struct activity *);
+ extern __nr_t
+ 	wrap_get_usb_nr(struct activity *);
++extern __nr_t
++	wrap_get_filesystem_nr(struct activity *);
+ 	
+ /* Functions used to read activities statistics */
+ extern __read_funct_t
+@@ -780,6 +784,8 @@ extern __read_funct_t
+ 	wrap_read_time_in_state(struct activity *);
+ extern __read_funct_t
+ 	wrap_read_bus_usb_dev(struct activity *);
++extern __read_funct_t
++	wrap_read_filesystem(struct activity *);
+ 
+ /* Other functions */
+ extern void
+diff --git a/sa_common.c b/sa_common.c
+index 67c55db..3ccf24b 100644
+--- a/sa_common.c
++++ b/sa_common.c
+@@ -1282,6 +1282,10 @@ int parse_sar_opt(char *argv[], int *opt, struct activity *act[],
+ 			SELECT_ACTIVITY(A_DISK);
+ 			break;
+ 
++		case 'F':
++			SELECT_ACTIVITY(A_FILESYSTEM);
++			break;
++			
+ 		case 'H':
+ 			p = get_activity_position(act, A_HUGE);
+ 			act[p]->options   |= AO_SELECTED;
+diff --git a/sa_wrap.c b/sa_wrap.c
+index 321b227..298f889 100644
+--- a/sa_wrap.c
++++ b/sa_wrap.c
+@@ -847,6 +847,28 @@ __read_funct_t wrap_read_bus_usb_dev(struct activity *a)
+ 	return;
+ }
+ 
++/*
++ ***************************************************************************
++ * Read filesystem statistics.
++ *
++ * IN:
++ * @a	Activity structure.
++ *
++ * OUT:
++ * @a	Activity structure with statistics.
++ ***************************************************************************
++ */
++__read_funct_t wrap_read_filesystem(struct activity *a)
++{
++	struct stats_filesystem *st_filesystem
++		= (struct stats_filesystem *) a->_buf0;
++
++	/* Read filesystems from /etc/mtab */
++	/* FIXME */
++
++	return;
++}
++
+ /*
+  ***************************************************************************
+  * Count number of interrupts that are in /proc/stat file.
+@@ -1049,3 +1071,24 @@ __nr_t wrap_get_usb_nr(struct activity *a)
+ 	
+ 	return 0;
+ }
++
++/*
++ ***************************************************************************
++ * Get number of mounted filesystems from /etc/mtab. Don't take into account
++ * pseudo-filesystems.
++ *
++ * IN:
++ * @a	Activity structure.
++ *
++ * RETURNS:
++ * Number of filesystems + a pre-allocation constant.
++ ***************************************************************************
++ */
++__nr_t wrap_get_filesystem_nr(struct activity *a)
++{
++	__nr_t n = 0;
++
++	/* FIXME */
++
++	return 0;
++}
+diff --git a/sar.c b/sar.c
+index 8dd998b..2674810 100644
+--- a/sar.c
++++ b/sar.c
+@@ -107,7 +107,7 @@ void usage(char *progname)
+ {
+ 	print_usage_title(stderr, progname);
+ 	fprintf(stderr, _("Options are:\n"
+-			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
++			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
+ 			  "[ -r ] [ -S ] [ -t ] [ -u [ ALL ] ] [ -V ] [ -v ] [ -W ] [ -w ] [ -y ]\n"
+ 			  "[ -I { <int> [,...] | SUM | ALL | XALL } ] [ -P { <cpu> [,...] | ALL } ]\n"
+ 			  "[ -m { <keyword> [,...] | ALL } ] [ -n { <keyword> [,...] | ALL } ]\n"
+@@ -132,6 +132,7 @@ void display_help(char *progname)
+ 	printf(_("\t-b\tI/O and transfer rate statistics\n"));
+ 	printf(_("\t-B\tPaging statistics\n"));
+ 	printf(_("\t-d\tBlock device statistics\n"));
++	printf(_("\t-F\tFilesystems statistics\n"));
+ 	printf(_("\t-H\tHugepages utilization statistics\n"));
+ 	printf(_("\t-I { <int> | SUM | ALL | XALL }\n"
+ 		 "\t\tInterrupts statistics\n"));
+diff --git a/xml_stats.c b/xml_stats.c
+index 66a6850..0a15f98 100644
+--- a/xml_stats.c
++++ b/xml_stats.c
+@@ -1989,4 +1989,21 @@ close_xml_markup:
+ 	if (CLOSE_MARKUP(a->options)) {
+ 		xml_markup_power_management(tab, CLOSE_XML_MARKUP);
+ 	}
+-}
+\ No newline at end of file
++}
++
++/*
++ ***************************************************************************
++ * Display filesystems statistics in XML.
++ *
++ * IN:
++ * @a		Activity structure with statistics.
++ * @curr	Index in array for current sample statistics.
++ * @tab		Indentation in XML output.
++ * @itv		Interval of time in jiffies.
++ ***************************************************************************
++ */
++__print_funct_t xml_print_filesystem_stats(struct activity *a, int curr, int tab,
++					   unsigned long long itv)
++{
++	/* FIXME */
++}
+diff --git a/xml_stats.h b/xml_stats.h
+index 3009860..6258703 100644
+--- a/xml_stats.h
++++ b/xml_stats.h
+@@ -87,5 +87,7 @@ extern __print_funct_t xml_print_pwr_wghfreq_stats
+ 	(struct activity *, int, int, unsigned long long);
+ extern __print_funct_t xml_print_pwr_usb_stats
+ 	(struct activity *, int, int, unsigned long long);
++extern __print_funct_t xml_print_filesystem_stats
++	(struct activity *, int, int, unsigned long long);
+ 
+ #endif /* _XML_STATS_H */
+-- 
+2.14.3
+

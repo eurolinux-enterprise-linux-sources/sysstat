@@ -1,7 +1,7 @@
 Summary: Collection of performance monitoring tools for Linux
 Name: sysstat
 Version: 10.1.5
-Release: 13%{?dist}
+Release: 17%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://sebastien.godard.pagesperso-orange.fr/
@@ -40,6 +40,28 @@ Patch14: 0001-sar-make-buffers-that-hold-timestamps-bigger.patch
 Patch15: 0001-pidstat-Display-stats-since-boot-time-for-a-list-of-.patch
 # fixes 1440000
 Patch16: 0001-sar-Improve-cpuinfo-read-for-POWER-architecture.patch
+# backport of -F flag
+Patch17: 0001-Added-filesystems-statistics-to-sar-part-1-Basic-def.patch
+Patch18: 0002-Filesystems-statistics-for-sar-part-2-Read-statistic.patch
+Patch19: 0003-Filesystems-statistics-for-sar-part-3-Display-statis.patch
+Patch20: 0004-Filesystems-statistics-part-4-ppc-and-db-output-form.patch
+Patch21: 0005-Filesystems-statistics-part-5-JSON-output-format.patch
+Patch22: 0006-Filesystems-statistics-part-6-XML-output-format.patch
+Patch23: 0007-Filesystems-statistics-part-7-Documentation-updates.patch
+Patch24: 0008-Filesystems-stats-Display-unmounted-filesystems-in-s.patch
+Patch25: 0009-Handle-octal-codes-in-filesystems-mount-point-names.patch
+Patch26: 0010-Collect-filesystems-stats-only-when-sadc-option-S-XD.patch
+Patch27: 0011-Small-fix-for-sar-A-in-sar-manual-page.patch
+Patch28: 0012-Add-option-to-display-mountpoint-names-instead-of-fi.patch
+Patch29: 0013-Revise-sar-usage-messages-to-be-F-MOUNT-rather-than-.patch
+Patch30: 0014-Use-statvfs-instead-of-statfs-system-call.patch
+Patch31: 0015-Fix-issue-48-sar-skips-long-filesystem-names.patch
+Patch32: 0016-Fix-issue-48-for-good-sar-skips-long-filesystem-name.patch
+Patch33: 0017-Use-proper-length-for-mountp-string.patch
+Patch34: 0018-Replace-strcpy-with-strncpy-to-avoid-buffer-overflow.patch
+Patch35: 0019-Cast-variables-to-target-type-before-use.patch
+Patch36: 0020-Fix-162-sadc-crashes-on-a-mtab-file-with-really-long.patch
+Patch37: 0021-Increase-maximum-fs-name-length-to-128.patch
 
 Requires: /etc/cron.d, fileutils, grep, sh-utils, textutils
 Requires(post): systemd, systemd-sysv
@@ -86,6 +108,27 @@ The cifsiostat command reports I/O statistics for CIFS file systems.
 %patch14 -p1 -b .korean
 %patch15 -p1 -b .pidstat
 %patch16 -p1 -b .power
+%patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
+%patch27 -p1
+%patch28 -p1
+%patch29 -p1
+%patch30 -p1
+%patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
 
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
@@ -147,6 +190,18 @@ fi
 %{_localstatedir}/log/sa
 
 %changelog
+* Mon Jun 25 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-17
+- fix potential buffer overflow identified by cppcheck (#1543238)
+
+* Fri Jun 22 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-16
+- apply previously added patches (#1543238)
+
+* Fri Jun 22 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-15
+- backport some more follow-up bugfixes related to -F (#1543238)
+
+* Thu Jun 21 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-14
+- backport -F switch for monitoring currently mounted filesystems (#1543238)
+
 * Wed Nov 08 2017 Michal Sekletar <msekleta@redhat.com> - 10.1.5-13
 - fix output of pidstat -p $PID (#1448489)
 - improve reading of /proc/cpuinfo on Power (#1440000)

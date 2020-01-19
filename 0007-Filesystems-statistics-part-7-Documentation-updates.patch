@@ -1,0 +1,80 @@
+From 0df6019dfc15218785a7a684de06541d2bfa2449 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Mon, 20 May 2013 14:57:39 +0200
+Subject: [PATCH] Filesystems statistics (part 7): Documentation updates
+
+This patch updates sar manual page to describe option -F used to display
+filesystems statistics.
+CHANGES file is also updated.
+
+(cherry picked from commit a1999309158fa089e4399ca7b88d0c5fa4c8fef3)
+---
+ man/sar.in | 45 ++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 44 insertions(+), 1 deletion(-)
+
+diff --git a/man/sar.in b/man/sar.in
+index 1ef4f89..65c89cb 100644
+--- a/man/sar.in
++++ b/man/sar.in
+@@ -2,7 +2,7 @@
+ .SH NAME
+ sar \- Collect, report, or save system activity information.
+ .SH SYNOPSIS
+-.B sar [ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]
++.B sar [ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]
+ .B [ -r ] [ -S ] [ -t ] [ -u [ ALL ] ] [ -V ] [ -v ] [ -W ] [ -w ] [ -y ]
+ .B [ -I {
+ .I int
+@@ -320,6 +320,49 @@ or written to a file (options
+ or
+ .B -o
+ ).
++.IP -F
++Display statistics for currently mounted filesystems. Pseudo-filesystems are
++ignored. At the end of the report,
++.B sar
++will display a summary of all those filesystems. The following values are
++displayed:
++
++.B MBfsfree
++.RS
++.RS
++Total amount a free space in megabytes (including space available only to privileged user).
++.RE
++
++.B MBfsused
++.RS
++Total amount of space used in megabytes.
++.RE
++
++.B %fsused
++.RS
++Percentage of filesystem space used, as seen by a privileged user.
++.RE
++
++.B %ufsused
++.RS
++Percentage of filesystem space used, as seen by an unprivileged user.
++.RE
++
++.B Ifree
++.RS
++Total number of free file nodes in filesystem.
++.RE
++
++.B Iused
++.RS
++Total number of file nodes used in filesystem.
++.RE
++
++.B %Iused
++.RS
++Percentage of file nodes used in filesystem.
++.RE
++.RE
+ .IP "-f [ filename ]"
+ Extract records from
+ .I filename
+-- 
+2.14.3
+

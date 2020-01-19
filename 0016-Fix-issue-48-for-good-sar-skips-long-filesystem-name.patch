@@ -1,0 +1,40 @@
+From fca187ac9893a35f10d20b8d7cfbda00d79c20dd Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Tue, 24 Mar 2015 21:38:07 +0100
+Subject: [PATCH] Fix issue #48 for good: sar skips long filesystem names
+
+How the number of filesystems is counted should be consistent with
+commit a82d6ab.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit 1cf65800b12d015ed9add350a6e2b40e6bcd5267)
+---
+ rd_stats.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index eff0348..cb45d82 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -2394,7 +2394,7 @@ int get_usb_nr(void)
+ int get_filesystem_nr(void)
+ {
+ 	FILE *fp;
+-	char line[256], fs_name[MAX_FS_LEN], mountp[128];
++	char line[512], fs_name[MAX_FS_LEN], mountp[256];
+ 	int fs = 0;
+ 	struct statvfs buf;
+ 
+@@ -2407,7 +2407,8 @@ int get_filesystem_nr(void)
+ 		if (line[0] == '/') {
+ 			
+ 			/* Read filesystem name and mount point */
+-			sscanf(line, "%71s %127s", fs_name, mountp);
++                       sscanf(line, "%127s", fs_name);
++                       sscanf(strchr(line, ' ') + 1, "%255s", mountp);
+ 
+                         /* Replace octal codes */
+ 			oct2chr(mountp);
+-- 
+2.14.3
+

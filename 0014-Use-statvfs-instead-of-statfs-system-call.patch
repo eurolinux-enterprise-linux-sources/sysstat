@@ -1,0 +1,80 @@
+From 9728faf84cdc4acc674cc862a99f57d4e6552beb Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Sun, 22 Jun 2014 16:09:18 +0200
+Subject: [PATCH] Use statvfs() instead of statfs() system call
+
+Use statvfs() system call instead of statfs() to get filesystems
+statistics with sar since:
+1) statfs() has been deprecated by the LSB (useful only to get fs
+type which is not needed here),
+2) statvfs() better handles large file sizes.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit 0936618a799918422012036aecbf7a2b0ee32354)
+---
+ rd_stats.c | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index 24a98f7..9f7fc37 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -27,7 +27,7 @@
+ #include <ctype.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+-#include <sys/vfs.h>
++#include <sys/statvfs.h>
+ #include <unistd.h>
+ 
+ #include "common.h"
+@@ -1918,7 +1918,7 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 	char line[256], fs_name[MAX_FS_LEN], mountp[128];
+ 	int fs = 0;
+ 	struct stats_filesystem *st_filesystem_i;
+-	struct statfs buf;
++	struct statvfs buf;
+ 
+ 	if ((fp = fopen(MTAB, "r")) == NULL)
+ 		return;
+@@ -1931,14 +1931,14 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 			
+ 			/* Replace octal codes */
+ 			oct2chr(mountp);
+-			
+-			if ((statfs(mountp, &buf) < 0) || (!buf.f_blocks))
++
++			if ((statvfs(mountp, &buf) < 0) || (!buf.f_blocks))
+ 				continue;
+ 			
+ 			st_filesystem_i = st_filesystem + fs++;
+-			st_filesystem_i->f_blocks = buf.f_blocks * buf.f_bsize;
+-			st_filesystem_i->f_bfree  = buf.f_bfree * buf.f_bsize;
+-			st_filesystem_i->f_bavail = buf.f_bavail * buf.f_bsize;
++			st_filesystem_i->f_blocks = buf.f_blocks * buf.f_frsize;
++			st_filesystem_i->f_bfree  = buf.f_bfree * buf.f_frsize;
++			st_filesystem_i->f_bavail = buf.f_bavail * buf.f_frsize;
+ 			st_filesystem_i->f_files  = buf.f_files;
+ 			st_filesystem_i->f_ffree  = buf.f_ffree;
+ 			strcpy(st_filesystem_i->fs_name, fs_name);
+@@ -2382,7 +2382,7 @@ int get_filesystem_nr(void)
+ 	FILE *fp;
+ 	char line[256], fs_name[MAX_FS_LEN], mountp[128];
+ 	int fs = 0;
+-	struct statfs buf;
++	struct statvfs buf;
+ 
+ 	if ((fp = fopen(MTAB, "r")) == NULL)
+ 		/* File non-existent */
+@@ -2399,7 +2399,7 @@ int get_filesystem_nr(void)
+ 			oct2chr(mountp);
+ 			
+ 			/* Check that total size is not null */
+-			if (statfs(mountp, &buf) < 0)
++			if (statvfs(mountp, &buf) < 0)
+ 				continue;
+ 			
+ 			if (buf.f_blocks) {
+-- 
+2.14.3
+

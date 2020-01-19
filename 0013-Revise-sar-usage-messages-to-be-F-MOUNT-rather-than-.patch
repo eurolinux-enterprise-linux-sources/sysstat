@@ -1,0 +1,36 @@
+From 403ee52b7908de615d0d8be955d9bdc00f419966 Mon Sep 17 00:00:00 2001
+From: Steve Kay <stevekay@gmail.com>
+Date: Fri, 12 Jun 2015 14:45:36 -0700
+Subject: [PATCH] Revise sar usage messages to be -F MOUNT rather than -F
+ MOUNTS, in order to match man page and program functionality.
+
+(cherry picked from commit 7ebced008f9c067b0959944d6a97e789af905b7b)
+---
+ sar.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sar.c b/sar.c
+index 5dfd915..a28b739 100644
+--- a/sar.c
++++ b/sar.c
+@@ -107,7 +107,7 @@ void usage(char *progname)
+ {
+ 	print_usage_title(stderr, progname);
+ 	fprintf(stderr, _("Options are:\n"
+-			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F [ MOUNTS ] ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
++			  "[ -A ] [ -B ] [ -b ] [ -C ] [ -d ] [ -F [ MOUNT ] ] [ -H ] [ -h ] [ -p ] [ -q ] [ -R ]\n"
+ 			  "[ -r ] [ -S ] [ -t ] [ -u [ ALL ] ] [ -V ] [ -v ] [ -W ] [ -w ] [ -y ]\n"
+ 			  "[ -I { <int> [,...] | SUM | ALL | XALL } ] [ -P { <cpu> [,...] | ALL } ]\n"
+ 			  "[ -m { <keyword> [,...] | ALL } ] [ -n { <keyword> [,...] | ALL } ]\n"
+@@ -132,7 +132,7 @@ void display_help(char *progname)
+ 	printf(_("\t-b\tI/O and transfer rate statistics\n"));
+ 	printf(_("\t-B\tPaging statistics\n"));
+ 	printf(_("\t-d\tBlock device statistics\n"));
+-	printf(_("\t-F [ MOUNTS ]\n"));
++	printf(_("\t-F [ MOUNT ]\n"));
+ 	printf(_("\t\tFilesystems statistics\n"));
+ 	printf(_("\t-H\tHugepages utilization statistics\n"));
+ 	printf(_("\t-I { <int> | SUM | ALL | XALL }\n"
+-- 
+2.14.3
+

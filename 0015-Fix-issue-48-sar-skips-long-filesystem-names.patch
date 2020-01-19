@@ -1,0 +1,63 @@
+From f5b70d8a0a4439b9745680a2e4ab433e76f154d5 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@users.noreply.github.com>
+Date: Fri, 20 Mar 2015 18:23:11 +0100
+Subject: [PATCH] Fix issue #48: sar skips long filesystem names
+
+If a filesystem had more than MAX_FS_LEN characters in length, sar
+didn't display it.
+This patch fixes the problem.
+
+Signed-off-by: Sebastien GODARD <sysstat@users.noreply.github.com>
+(cherry picked from commit a82d6abce8ff35a5bf0d060456ca653f722a9f73)
+---
+ rd_stats.c | 24 +++++++++++++++++++-----
+ 1 file changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index 9f7fc37..eff0348 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -1915,7 +1915,7 @@ void read_bus_usb_dev(struct stats_pwr_usb *st_pwr_usb, int nbr)
+ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ {
+ 	FILE *fp;
+-	char line[256], fs_name[MAX_FS_LEN], mountp[128];
++	char line[512], fs_name[MAX_FS_LEN], mountp[256];
+ 	int fs = 0;
+ 	struct stats_filesystem *st_filesystem_i;
+ 	struct statvfs buf;
+@@ -1925,13 +1925,27 @@ void read_filesystem(struct stats_filesystem *st_filesystem, int nbr)
+ 
+ 	while ((fgets(line, 256, fp) != NULL) && (fs < nbr)) {
+ 		if (line[0] == '/') {
+-			
+-			/* Read current filesystem name and mount point */
+-			sscanf(line, "%71s %127s", fs_name, mountp);
+-			
++
++			/* Read current filesystem name */
++			sscanf(line, "%127s", fs_name);
++			/*
++			 * And now read the corresponding mount point.
++			 * Read fs name and mount point in two distinct operations.
++			 * Indeed, if fs name length is greater than 127 chars,
++			 * previous scanf() will read only the first 127 chars, and
++			 * mount point name will be read using the remaining chars
++			 * from the fs name. This will result in a bogus name
++			 * and following statvfs() function will always fail.
++			 */
++			sscanf(strchr(line, ' ') + 1, "%255s", mountp);
++
+ 			/* Replace octal codes */
+ 			oct2chr(mountp);
+ 
++			/*
++			 * It's important to have read the whole mount point name
++			 * for statvfs() to work properly (see above).
++			 */
+ 			if ((statvfs(mountp, &buf) < 0) || (!buf.f_blocks))
+ 				continue;
+ 			
+-- 
+2.14.3
+
