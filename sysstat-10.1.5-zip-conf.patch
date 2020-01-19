@@ -1,0 +1,10 @@
+diff -ur sysstat-10.1.5.orig/sysstat.sysconfig.in sysstat-10.1.5/sysstat.sysconfig.in
+--- sysstat-10.1.5.orig/sysstat.sysconfig.in	2012-05-13 15:00:39.000000000 +0200
++++ sysstat-10.1.5/sysstat.sysconfig.in	2014-09-01 23:08:48.412640491 +0200
+@@ -12,3 +12,6 @@
+ # which are used for the generation of log files.
+ SADC_OPTIONS="@COLLECT_ALL@"
+ 
++# Compression program to use.
++ZIP="@ZIP@"
++

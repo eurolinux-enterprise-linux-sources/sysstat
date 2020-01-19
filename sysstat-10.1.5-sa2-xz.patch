@@ -1,0 +1,12 @@
+diff -ur sysstat-10.1.5.orig/sa2.in sysstat-10.1.5/sa2.in
+--- sysstat-10.1.5.orig/sa2.in	2012-03-15 16:48:56.000000000 +0100
++++ sysstat-10.1.5/sa2.in	2014-09-01 22:10:39.901270008 +0200
+@@ -50,7 +50,7 @@
+ cd ${ENDIR}
+ [ -L ${RPT} ] && rm -f ${RPT}
+ ${ENDIR}/sar $* -f ${DFILE} > ${RPT}
+-find ${DDIR} \( -name 'sar??' -o -name 'sa??' -o -name 'sar??.gz' -o -name 'sa??.gz' -o -name 'sar??.bz2' -o -name 'sa??.bz2' \) \
++find ${DDIR} \( -name 'sar??' -o -name 'sa??' -o -name 'sar??.xz' -o -name 'sa??.xz' -o -name 'sar??.gz' -o -name 'sa??.gz' -o -name 'sar??.bz2' -o -name 'sa??.bz2' \) \
+ 	-mtime +"${HISTORY}" -exec rm -f {} \;
+ find ${DDIR} \( -name 'sar??' -o -name 'sa??' \) -type f -mtime +"${COMPRESSAFTER}" \
+ 	-exec ${ZIP} {} \; > /dev/null 2>&1

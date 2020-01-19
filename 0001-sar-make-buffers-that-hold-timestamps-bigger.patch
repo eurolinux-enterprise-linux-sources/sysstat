@@ -1,0 +1,68 @@
+From f3964e0fa19e0c33470f37014ebcebf0b4253363 Mon Sep 17 00:00:00 2001
+From: Michal Sekletar <msekleta@redhat.com>
+Date: Fri, 30 Sep 2016 18:05:44 +0200
+Subject: [PATCH] sar: make buffers that hold timestamps bigger
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+On systems that use Korean UTF-8 locale sar will not print timestamp
+because there is not enough space in the buffer.
+
+I bumped buffer size to 64 bytes because I figured out that 32 bytes is
+still not enough to print out timestamp when using some glibc supported
+locales.
+
+$ LC_TIME=ko_KR.UTF-8 ./sar 1 1
+
+Before:
+Linux 4.7.2-201.fc24.x86_64 (morgoth.usersys.redhat.com)        2016년 09월 30일   _x86_64_        (4 CPU)
+
+                CPU     %user     %nice   %system   %iowait    %steal     %idle
+                all      4.51      0.00      2.51      0.00      0.00     92.98
+Average:        all      4.51      0.00      2.51      0.00      0.00     92.98
+
+After:
+Linux 4.7.2-201.fc24.x86_64 (morgoth.usersys.redhat.com)   2016년 09월 30일   _x86_64_        (4 CPU)
+
+18시 18분 36초     CPU     %user     %nice   %system   %iowait    %steal     %idle
+18시 18분 37초     all      3.76      0.00      2.26      0.00      0.00     93.98
+Average:        all      3.76      0.00      2.26      0.00      0.00     93.98
+---
+ sa.h  | 2 +-
+ sar.c | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/sa.h b/sa.h
+index 54e7a4e..c11dbe9 100644
+--- a/sa.h
++++ b/sa.h
+@@ -199,7 +199,7 @@
+ #define NR_USB_PREALLOC		5
+ 
+ #define UTSNAME_LEN		65
+-#define TIMESTAMP_LEN		16
++#define TIMESTAMP_LEN		64
+ #define HEADER_LINE_LEN		512
+ 
+ /* Maximum number of args that can be passed to sadc */
+diff --git a/sar.c b/sar.c
+index e8ad83e..8dd998b 100644
+--- a/sar.c
++++ b/sar.c
+@@ -469,10 +469,10 @@ int write_stats(int curr, int read_from_file, long *cnt, int use_tm_start,
+ 	}
+ 
+ 	/* Set previous timestamp */
+-	if (set_record_timestamp_string(!curr, timestamp[!curr], 16))
++	if (set_record_timestamp_string(!curr, timestamp[!curr], TIMESTAMP_LEN))
+ 		return 0;
+ 	/* Set current timestamp */
+-	if (set_record_timestamp_string(curr,  timestamp[curr],  16))
++	if (set_record_timestamp_string(curr,  timestamp[curr],  TIMESTAMP_LEN))
+ 		return 0;
+ 
+ 	/* Check if we are beginning a new day */
+-- 
+2.9.3
+

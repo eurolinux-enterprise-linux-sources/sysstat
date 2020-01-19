@@ -1,0 +1,209 @@
+diff -upr sysstat-10.1.5.orig/common.h sysstat-10.1.5/common.h
+--- sysstat-10.1.5.orig/common.h	2013-03-23 17:31:46.000000000 +0100
++++ sysstat-10.1.5/common.h	2016-04-29 12:47:09.285214132 +0200
+@@ -106,9 +106,12 @@
+  *
+  * NB: Define SP_VALUE() to normalize to %;
+  * HZ is 1024 on IA64 and % should be normalized to 100.
++ * SP_VALUE_100() will not output value bigger than 100; this is needed for some
++ *     corner cases, should be used with care.
+  */
+ #define S_VALUE(m,n,p)	(((double) ((n) - (m))) / (p) * HZ)
+ #define SP_VALUE(m,n,p)	(((double) ((n) - (m))) / (p) * 100)
++#define SP_VALUE_100(m,n,p)	MINIMUM((((double) ((n) - (m))) / (p) * 100),100)
+ 
+ /*
+  * Under very special circumstances, STDOUT may become unavailable.
+diff -upr sysstat-10.1.5.orig/pidstat.c sysstat-10.1.5/pidstat.c
+--- sysstat-10.1.5.orig/pidstat.c	2013-03-23 17:31:46.000000000 +0100
++++ sysstat-10.1.5/pidstat.c	2016-04-29 13:04:02.672402150 +0200
+@@ -152,15 +152,35 @@ void salloc_pid_array(unsigned int len)
+  */
+ void salloc_pid(unsigned int len)
+ {
+-	int i;
++	short i;
++
++	for (i = 0; i < 3; i++) {
++		if ((st_pid_list[i] = (struct pid_stats *) calloc(len, PID_STATS_SIZE)) == NULL) {
++			perror("calloc");
++			exit(4);
++		}
++	}
++}
++
++/*
++ ***************************************************************************
++ * Reallocate structures for PIDs to read.
++ ***************************************************************************
++ */
++void realloc_pid(void)
++{
++	short i;
++	unsigned int new_size = 2 * pid_nr;
+ 
+ 	for (i = 0; i < 3; i++) {
+-		if ((st_pid_list[i] = (struct pid_stats *) malloc(PID_STATS_SIZE * len)) == NULL) {
+-			perror("malloc");
++		if ((st_pid_list[i] = (struct pid_stats *) realloc(st_pid_list[i], PID_STATS_SIZE * new_size)) == NULL) {
++			perror("realloc");
+ 			exit(4);
+ 		}
+-		memset(st_pid_list[i], 0, PID_STATS_SIZE * len);
++		memset(st_pid_list[i] + pid_nr, 0, PID_STATS_SIZE * (new_size - pid_nr));
+ 	}
++
++	pid_nr = new_size;
+ }
+ 
+ /*
+@@ -774,23 +794,22 @@ void read_task_stats(int curr, unsigned
+ 	if ((dir = opendir(filename)) == NULL)
+ 		return;
+ 
+-	while (*index < pid_nr) {
++	while ((drp = readdir(dir)) != NULL) {
++		if (!isdigit(drp->d_name[0])) {
++			continue;
++		}
+ 
+-		while ((drp = readdir(dir)) != NULL) {
+-			if (isdigit(drp->d_name[0]))
+-				break;
++		pst = st_pid_list[curr] + (*index)++;
++		if (read_pid_stats(atoi(drp->d_name), pst, &thr_nr, pid)) {
++			/* Thread no longer exists */
++			pst->pid = 0;
+ 		}
+ 
+-		if (drp) {
+-			pst = st_pid_list[curr] + (*index)++;
+-			if (read_pid_stats(atoi(drp->d_name), pst, &thr_nr, pid)) {
+-				/* Thread no longer exists */
+-				pst->pid = 0;
+-			}
++		if (*index >= pid_nr) {
++			realloc_pid();
+ 		}
+-		else
+-			break;
+ 	}
++
+ 	closedir(dir);
+ }
+ 
+@@ -830,36 +849,34 @@ void read_stats(int curr)
+ 			exit(4);
+ 		}
+ 
+-		while (p < pid_nr) {
++		/* Get directory entries */
++                while ((drp = readdir(dir)) != NULL) {
++                        if (!isdigit(drp->d_name[0])) {
++                                continue;
++                        }
++
++                        pst = st_pid_list[curr] + p++;
++                        pid = atoi(drp->d_name);
++
++                        if (read_pid_stats(pid, pst, &thr_nr, 0)) {
++                            /* Process has terminated */
++                            pst->pid = 0;
++                        } else if (DISPLAY_TID(pidflag)) {
++                            /* Read stats for threads in task subdirectory */
++                            read_task_stats(curr, pid, &p);
+ 
+-			/* Get directory entries */
+-			while ((drp = readdir(dir)) != NULL) {
+-				if (isdigit(drp->d_name[0]))
+-					break;
+-			}
+-			if (drp) {
+-				pst = st_pid_list[curr] + p++;
+-				pid = atoi(drp->d_name);
+-	
+-				if (read_pid_stats(pid, pst, &thr_nr, 0)) {
+-					/* Process has terminated */
+-					pst->pid = 0;
+-				}
+-	
+-				else if (DISPLAY_TID(pidflag)) {
+-					/* Read stats for threads in task subdirectory */
+-					read_task_stats(curr, pid, &p);
+-				}
+-			}
+-			else {
+-				for (q = p; q < pid_nr; q++) {
+-					pst = st_pid_list[curr] + q;
+-					pst->pid = 0;
+-				}
+-				break;
+ 			}
++
++			if (p >= pid_nr) {
++                            realloc_pid();
++                        }
+ 		}
+ 
++                for (q = p; q < pid_nr; q++) {
++                    pst = st_pid_list[curr] + q;
++                    pst->pid = 0;
++                }
++
+ 		/* Close /proc directory */
+ 		closedir(dir);
+ 	}
+@@ -1174,15 +1191,15 @@ int write_pid_task_all_stats(int prev, i
+ 			printf(" %7.2f %7.2f %7.2f %7.2f",
+ 			       (pstc->utime - pstc->gtime) < (pstp->utime - pstp->gtime) ?
+ 			       0.0 :
+-			       SP_VALUE(pstp->utime - pstp->gtime,
++			       SP_VALUE_100(pstp->utime - pstp->gtime,
+ 					pstc->utime - pstc->gtime, itv),
+-			       SP_VALUE(pstp->stime,  pstc->stime, itv),
+-			       SP_VALUE(pstp->gtime,  pstc->gtime, itv),
++			       SP_VALUE_100(pstp->stime,  pstc->stime, itv),
++			       SP_VALUE_100(pstp->gtime,  pstc->gtime, itv),
+ 			       /* User time already includes guest time */
+ 			       IRIX_MODE_OFF(pidflag) ?
+-			       SP_VALUE(pstp->utime + pstp->stime,
++			       SP_VALUE_100(pstp->utime + pstp->stime,
+ 					pstc->utime + pstc->stime, g_itv) :
+-			       SP_VALUE(pstp->utime + pstp->stime,
++			       SP_VALUE_100(pstp->utime + pstp->stime,
+ 					pstc->utime + pstc->stime, itv));
+ 
+ 			printf("   %3d", pstc->processor);
+@@ -1351,15 +1368,15 @@ int write_pid_task_cpu_stats(int prev, i
+ 		printf(" %7.2f %7.2f %7.2f %7.2f",
+ 		       (pstc->utime - pstc->gtime) < (pstp->utime - pstp->gtime) ?
+ 		       0.0 :
+-		       SP_VALUE(pstp->utime - pstp->gtime,
++		       SP_VALUE_100(pstp->utime - pstp->gtime,
+ 				pstc->utime - pstc->gtime, itv),
+-		       SP_VALUE(pstp->stime,  pstc->stime, itv),
+-		       SP_VALUE(pstp->gtime,  pstc->gtime, itv),
++		       SP_VALUE_100(pstp->stime,  pstc->stime, itv),
++		       SP_VALUE_100(pstp->gtime,  pstc->gtime, itv),
+ 		       /* User time already includes guest time */
+ 		       IRIX_MODE_OFF(pidflag) ?
+-		       SP_VALUE(pstp->utime + pstp->stime,
++		       SP_VALUE_100(pstp->utime + pstp->stime,
+ 				pstc->utime + pstc->stime, g_itv) :
+-		       SP_VALUE(pstp->utime + pstp->stime,
++		       SP_VALUE_100(pstp->utime + pstp->stime,
+ 				pstc->utime + pstc->stime, itv));
+ 
+ 		if (!disp_avg) {
+diff -upr sysstat-10.1.5.orig/pidstat.h sysstat-10.1.5/pidstat.h
+--- sysstat-10.1.5.orig/pidstat.h	2013-03-23 17:31:46.000000000 +0100
++++ sysstat-10.1.5/pidstat.h	2016-04-28 18:24:37.700124018 +0200
+@@ -13,7 +13,7 @@
+ #define K_P_CHILD	"CHILD"
+ #define K_P_ALL		"ALL"
+ 
+-#define NR_PID_PREALLOC	10
++#define NR_PID_PREALLOC	100
+ 
+ #define MAX_COMM_LEN	128
+ #define MAX_CMDLINE_LEN	128

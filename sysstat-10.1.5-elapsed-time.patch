@@ -1,0 +1,24 @@
+diff -ur sysstat-10.1.5.orig/man/iostat.in sysstat-10.1.5/man/iostat.in
+--- sysstat-10.1.5.orig/man/iostat.in	2012-11-27 21:20:34.000000000 +0100
++++ sysstat-10.1.5/man/iostat.in	2014-11-11 17:44:29.563840350 +0100
+@@ -264,7 +264,7 @@
+ .RE
+ .B %util
+ .RS
+-Percentage of CPU time during which I/O requests were issued to the device
++Percentage of elapsed time during which I/O requests were issued to the device
+ (bandwidth utilization for the device). Device saturation occurs when this
+ value is close to 100%.
+ .RE
+diff -ur sysstat-10.1.5.orig/man/sar.in sysstat-10.1.5/man/sar.in
+--- sysstat-10.1.5.orig/man/sar.in	2012-09-30 15:11:06.000000000 +0200
++++ sysstat-10.1.5/man/sar.in	2014-11-11 17:45:00.682712161 +0100
+@@ -306,7 +306,7 @@
+ 
+ .B %util
+ .RS
+-Percentage of CPU time during which I/O requests were issued to the device
++Percentage of elapsed time during which I/O requests were issued to the device
+ (bandwidth utilization for the device). Device saturation occurs when this
+ value is close to 100%.
+ .RE

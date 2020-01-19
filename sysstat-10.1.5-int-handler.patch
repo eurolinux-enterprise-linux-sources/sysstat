@@ -1,0 +1,27 @@
+diff -upr sysstat-10.1.5.orig/sadc.c sysstat-10.1.5/sadc.c
+--- sysstat-10.1.5.orig/sadc.c	2013-03-23 17:31:46.000000000 +0100
++++ sysstat-10.1.5/sadc.c	2016-04-29 17:52:11.438614928 +0200
+@@ -225,17 +225,19 @@ void alarm_handler(int sig)
+  */
+ void int_handler(int sig)
+ {
+-	if (!optz) {
+-		/* sadc hasn't been called by sar */
++        pid_t ppid = getppid();
++
++        if (!optz || (ppid == 1)) {
++		/* sadc hasn't been called by sar or sar process is already dead */
+ 		exit(1);
+ 	}
+-	
++
+ 	/*
+ 	 * When starting sar then pressing ctrl/c, SIGINT is received
+ 	 * by sadc, not sar. So send SIGINT to sar so that average stats
+ 	 * can be displayed.
+ 	 */
+-	if (kill(getppid(), SIGINT) < 0) {
++	if (kill(ppid, SIGINT) < 0) {
+ 		exit(1);
+ 	}
+ }

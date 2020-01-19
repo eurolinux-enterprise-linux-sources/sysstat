@@ -1,0 +1,16 @@
+diff -upr sysstat-10.1.5.orig/common.h sysstat-10.1.5/common.h
+--- sysstat-10.1.5.orig/common.h	2016-04-29 14:12:25.709765182 +0200
++++ sysstat-10.1.5/common.h	2016-04-29 14:15:21.463578820 +0200
+@@ -28,10 +28,10 @@
+ #define SEC_PER_DAY	3600 * 24
+ 
+ /* Maximum number of CPUs */
+-#if defined(__CPU_SETSIZE) && __CPU_SETSIZE > 2048
++#if defined(__CPU_SETSIZE) && __CPU_SETSIZE > 8192
+ #define NR_CPUS		__CPU_SETSIZE
+ #else
+-#define NR_CPUS		2048
++#define NR_CPUS		8192
+ #endif
+ 
+ /* Maximum number of interrupts */

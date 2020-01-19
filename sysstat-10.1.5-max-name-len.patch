@@ -1,0 +1,35 @@
+diff -upr sysstat-10.1.5.orig/common.h sysstat-10.1.5/common.h
+--- sysstat-10.1.5.orig/common.h	2016-04-29 14:29:24.298889634 +0200
++++ sysstat-10.1.5/common.h	2016-04-29 14:30:10.589577176 +0200
+@@ -69,7 +69,7 @@
+ #define MAX_FILE_LEN		256
+ #define MAX_PF_NAME		1024
+ #define DEFAULT_DEVMAP_MAJOR	253
+-#define MAX_NAME_LEN		72
++#define MAX_NAME_LEN		128
+ 
+ #define IGNORE_VIRTUAL_DEVICES	FALSE
+ #define ACCEPT_VIRTUAL_DEVICES	TRUE
+diff -upr sysstat-10.1.5.orig/iostat.c sysstat-10.1.5/iostat.c
+--- sysstat-10.1.5.orig/iostat.c	2013-03-23 17:31:46.000000000 +0100
++++ sysstat-10.1.5/iostat.c	2016-04-29 15:02:24.264492629 +0200
+@@ -748,7 +748,8 @@ void read_diskstats_stat(int curr)
+ 				 * (if different from "nodev") works around known issues
+ 				 * with EMC PowerPath.
+ 				 */
+-				strncpy(dev_name, ioc_dname, MAX_NAME_LEN);
++				strncpy(dev_name, ioc_dname, MAX_NAME_LEN - 1);
++                                dev_name[MAX_NAME_LEN - 1] = '\0';
+ 			}
+ 		}
+ 
+@@ -759,7 +760,8 @@ void read_diskstats_stat(int curr)
+ 			 */
+ 			dm_name = transform_devmapname(major, minor);
+ 			if (dm_name) {
+-				strncpy(dev_name, dm_name, MAX_NAME_LEN);
++				strncpy(dev_name, dm_name, MAX_NAME_LEN - 1);
++                                dev_name[MAX_NAME_LEN - 1] = '\0';
+ 			}
+ 		}
+ 
