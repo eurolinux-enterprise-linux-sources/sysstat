@@ -1,7 +1,7 @@
 Summary: Collection of performance monitoring tools for Linux
 Name: sysstat
 Version: 10.1.5
-Release: 17%{?dist}.1
+Release: 18%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://sebastien.godard.pagesperso-orange.fr/
@@ -64,6 +64,14 @@ Patch36: 0020-Fix-162-sadc-crashes-on-a-mtab-file-with-really-long.patch
 Patch37: 0021-Increase-maximum-fs-name-length-to-128.patch
 # backport -f flag (force fdatasync() after append to sa file)
 Patch38: 0001-sadc-Add-a-f-flag-to-force-fdatasync-use.patch
+# don't call filesystem count functions when we are not collecting fs statistics
+Patch39: 0001-avoiding-triggering-automounts-bug-1670060.patch
+# skip autofs when gathering filesystem statistics
+Patch40: 0001-ignoring-autofs-as-real-filesystem-by-counting-numbe.patch
+# small manpage fix
+Patch41: 0001-man-use-correct-preposition.patch
+# fix CPU usage reporting
+Patch42: 0001-pidstat-Now-handle-processes-with-spaces-in-their-na.patch
 
 Requires: /etc/cron.d, fileutils, grep, sh-utils, textutils
 Requires(post): systemd, systemd-sysv
@@ -132,6 +140,10 @@ The cifsiostat command reports I/O statistics for CIFS file systems.
 %patch36 -p1
 %patch37 -p1
 %patch38 -p1
+%patch39 -p1
+%patch40 -p1
+%patch41 -p1
+%patch42 -p1
 
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
@@ -193,8 +205,12 @@ fi
 %{_localstatedir}/log/sa
 
 %changelog
-* Mon Jun 03 2019 Michal Sekletár <msekleta@redhat.com> - 10.1.5-17.1
-- add -f flag to force fdatasync() after sa file update (#1716502)
+* Thu Mar 28 2019 Michal Sekletár <msekleta@redhat.com> - 10.1.5-18
+- add -f flag to force fdatasync() after sa file update (#1662094)
+- don't call filesystem count functions when we are not collecting fs statistics (#1670060)
+- skip autofs when gathering filesystem statistics (#1670060)
+- fix use of incorrect preposition in sar man page (#1624410)
+- fix CPU usage reporting (#1618688)
 
 * Mon Jun 25 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-17
 - fix potential buffer overflow identified by cppcheck (#1543238)

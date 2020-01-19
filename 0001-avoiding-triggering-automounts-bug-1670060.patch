@@ -1,0 +1,26 @@
+From cc95940e4c0d5f8916d95e627a494c321b95d139 Mon Sep 17 00:00:00 2001
+From: Ondrej Dubaj <odubaj@redhat.com>
+Date: Tue, 26 Feb 2019 08:36:14 +0100
+Subject: [PATCH] avoiding triggering automounts, bug #1670060
+
+---
+ sadc.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/sadc.c b/sadc.c
+index fb3254d..cfb9809 100644
+--- a/sadc.c
++++ b/sadc.c
+@@ -283,6 +283,9 @@ void sa_sys_init(void)
+ 
+ 	for (i = 0; i < NR_ACT; i++) {
+ 
++		if ( ! (act[i]->options & AO_COLLECTED ) )
++			continue;
++		
+ 		if (act[i]->f_count) {
+ 			/* Number of items is not a constant and should be calculated */
+ 			act[i]->nr = (*act[i]->f_count)(act[i]);
+-- 
+2.17.1
+
