@@ -1,0 +1,47 @@
+From 81ef06797b16d08a4558a41891b9d9421a0a96f8 Mon Sep 17 00:00:00 2001
+From: Breno Leitao <breno.leitao@gmail.com>
+Date: Mon, 31 Oct 2016 09:23:59 -0400
+Subject: [PATCH] sar: Improve cpuinfo read for POWER architecture
+
+Currently CPU frequency is not being read properly on POWER archicture.
+It shows the frequency as:
+  # sar -m CPU 1 5
+...
+  06:30:28 AM     CPU       MHz
+  06:30:36 AM     all      0.00
+
+This is caused because /proc/cpuinfo is differently between Intel and
+POWER.
+This patch simply fix the parsing function (read_cpuinfo).
+
+Signed-off-by: Breno Leitao <breno.leitao@gmail.com>
+
+Resolves: #1440000
+---
+ rd_stats.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/rd_stats.c b/rd_stats.c
+index dafd975..d8c337a 100644
+--- a/rd_stats.c
++++ b/rd_stats.c
+@@ -1625,10 +1625,12 @@ void read_cpuinfo(struct stats_pwr_cpufreq *st_pwr_cpufreq, int nbr)
+ 		if (!strncmp(line, "processor\t", 10)) {
+ 			sscanf(strchr(line, ':') + 1, "%d", &proc_nb);
+ 		}
+-		
+-		else if (!strncmp(line, "cpu MHz\t", 8)) {
+-			sscanf(strchr(line, ':') + 1, "%u.%u", &ifreq, &dfreq);
+-			
++
++                /* Entry in /proc/cpuinfo is different between Intel and Power architectures */
++		else if (!strncmp(line, "cpu MHz\t", 8) ||
++			 !strncmp(line, "clock\t", 6)) {
++                        sscanf(strchr(line, ':') + 1, "%u.%u", &ifreq, &dfreq);
++
+ 			if (proc_nb < (nbr - 1)) {
+ 				/* Save current CPU frequency */
+ 				st_pwr_cpufreq_i = st_pwr_cpufreq + proc_nb + 1;
+-- 
+2.13.6
+

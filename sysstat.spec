@@ -1,7 +1,7 @@
 Summary: Collection of performance monitoring tools for Linux
 Name: sysstat
 Version: 10.1.5
-Release: 12%{?dist}
+Release: 13%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://sebastien.godard.pagesperso-orange.fr/
@@ -36,6 +36,10 @@ Patch12: sysstat-10.1.5-nfsiostat.patch
 Patch13: sysstat-10.1.5-tapestat.patch
 # fixes 1381128
 Patch14: 0001-sar-make-buffers-that-hold-timestamps-bigger.patch
+# fixes 1448489
+Patch15: 0001-pidstat-Display-stats-since-boot-time-for-a-list-of-.patch
+# fixes 1440000
+Patch16: 0001-sar-Improve-cpuinfo-read-for-POWER-architecture.patch
 
 Requires: /etc/cron.d, fileutils, grep, sh-utils, textutils
 Requires(post): systemd, systemd-sysv
@@ -80,6 +84,9 @@ The cifsiostat command reports I/O statistics for CIFS file systems.
 %patch12 -p1 -b .nfsiostat
 %patch13 -p1 -b .tapestat
 %patch14 -p1 -b .korean
+%patch15 -p1 -b .pidstat
+%patch16 -p1 -b .power
+
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
 
@@ -140,6 +147,10 @@ fi
 %{_localstatedir}/log/sa
 
 %changelog
+* Wed Nov 08 2017 Michal Sekletar <msekleta@redhat.com> - 10.1.5-13
+- fix output of pidstat -p $PID (#1448489)
+- improve reading of /proc/cpuinfo on Power (#1440000)
+
 * Wed Mar 29 2017 Michal Sekletar <msekleta@redhat.com> - 10.1.5-12
 - sar: output timestamps when running with ko_KR.UTF-8 locale (#1381128)
 

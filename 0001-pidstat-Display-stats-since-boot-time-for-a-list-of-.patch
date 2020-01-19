@@ -1,0 +1,52 @@
+From b4cad00cfb3086490261db7202de8ed846e79344 Mon Sep 17 00:00:00 2001
+From: Sebastien GODARD <sysstat@orange.fr.fake>
+Date: Wed, 2 Oct 2013 09:55:38 +0200
+Subject: [PATCH] pidstat: Display stats since boot time for a list of given
+ processes
+
+pidstat displays statistics since system startup when the interval and
+count parameters are not set on the command line (eg. entering "pidstat
+-d" will display I/O statistics for all processes that have had I/O
+activity since boot time). But pidstat couldn't display those stats when
+some PID numbers were entered on the command line (eg. "pidstat -d -p
+1234" to display I/O stats since system startup for process 1234).
+This patch makes it possible now.
+
+Signed-off-by: Sebastien GODARD <sysstat@orange.fr.fake>
+(cherry picked from commit 18c7a03f52826942a720b2a0cc32e1f074784c6a)
+
+Resolves: #1448489
+---
+ pidstat.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/pidstat.c b/pidstat.c
+index 3bb98f2..85d4d98 100644
+--- a/pidstat.c
++++ b/pidstat.c
+@@ -1048,10 +1048,18 @@ int get_pid_to_display(int prev, int curr, int p, unsigned int activity,
+ 	
+ 	else if (DISPLAY_PID(pidflag)) {
+ 		*pstp = st_pid_list[prev] + p;
+-
+-		if (!(*pstp)->pid)
+-			/* PID no longer exists */
+-			return 0;
++		if (!(*pstp)->pid) {
++			if (interval)
++				/* PID no longer exists */
++				return 0;
++			else {
++				/*
++				 * If interval is null, then we are trying to
++				 * display stats for a given process since boot time.
++				 */
++				*pstp = &st_pid_null;
++			}
++		}
+ 	}
+ 
+ 	if (COMMAND_STRING(pidflag)) {
+-- 
+2.13.6
+
