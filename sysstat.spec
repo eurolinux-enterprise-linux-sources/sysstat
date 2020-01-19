@@ -1,7 +1,7 @@
 Summary: Collection of performance monitoring tools for Linux
 Name: sysstat
 Version: 10.1.5
-Release: 17%{?dist}
+Release: 17%{?dist}.1
 License: GPLv2+
 Group: Applications/System
 URL: http://sebastien.godard.pagesperso-orange.fr/
@@ -62,6 +62,8 @@ Patch34: 0018-Replace-strcpy-with-strncpy-to-avoid-buffer-overflow.patch
 Patch35: 0019-Cast-variables-to-target-type-before-use.patch
 Patch36: 0020-Fix-162-sadc-crashes-on-a-mtab-file-with-really-long.patch
 Patch37: 0021-Increase-maximum-fs-name-length-to-128.patch
+# backport -f flag (force fdatasync() after append to sa file)
+Patch38: 0001-sadc-Add-a-f-flag-to-force-fdatasync-use.patch
 
 Requires: /etc/cron.d, fileutils, grep, sh-utils, textutils
 Requires(post): systemd, systemd-sysv
@@ -129,6 +131,7 @@ The cifsiostat command reports I/O statistics for CIFS file systems.
 %patch35 -p1
 %patch36 -p1
 %patch37 -p1
+%patch38 -p1
 
 iconv -f windows-1252 -t utf8 CREDITS > CREDITS.aux
 mv CREDITS.aux CREDITS
@@ -190,6 +193,9 @@ fi
 %{_localstatedir}/log/sa
 
 %changelog
+* Mon Jun 03 2019 Michal Sekletár <msekleta@redhat.com> - 10.1.5-17.1
+- add -f flag to force fdatasync() after sa file update (#1716502)
+
 * Mon Jun 25 2018 Michal Sekletar <msekleta@redhat.com> - 10.1.5-17
 - fix potential buffer overflow identified by cppcheck (#1543238)
 
